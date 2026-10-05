@@ -144,6 +144,11 @@ def apply(project, spec, log=print):
         z.set_image(img)
         log(f'image {page}: patched {d["png"]} at {tuple(pos)}')
 
+    for d in spec.get('retouch') or []:
+        apply_retouch(project, spec, d)
+        log(f'retouch {d.get("target", "page")} {d.get("page", "")}{d.get("lib", "")}'
+            f'{"/" + str(d["id"]) if "id" in d else ""} -> {d.get("text", "")!r}')
+
     for d in spec.get('remove_vars') or []:
         page, vp = _int(d['page']), _int(d['vp'])
         before = project.vars.pages.get(page, [])
@@ -207,6 +212,108 @@ def apply(project, spec, log=print):
         else:
             project.vpmem.set_word(vp, _int(d['word']))
         log(f'vp default 0x{vp:04X}')
+
+
+def _font(project, spec, name, size):
+    from PIL import ImageFont
+    if name in (None, 'stock'):
+        path = os.path.join(project.root, 'truefont', 'font.ttf')
+    else:
+        path = _path(spec, name)
+    try:
+        return ImageFont.truetype(path, size)
+    except OSError as e:
+        raise SpecError(f'font {path}: {e}')
+
+
+def _border_color(img, rect):
+    x0, y0, x1, y1 = rect
+    px = []
+    for x in range(max(0, x0 - 1), min(img.size[0], x1 + 2)):
+        for y in (y0 - 1, y1 + 1):
+            if 0 <= y < img.size[1]:
+                px.append(img.getpixel((x, y)))
+    for y in range(max(0, y0), min(img.size[1], y1 + 1)):
+        for x in (x0 - 1, x1 + 1):
+            if 0 <= x < img.size[0]:
+                px.append(img.getpixel((x, y)))
+    if not px:
+        return (0, 0, 0)
+    return tuple(sorted(c[i] for c in px)[len(px) // 2] for i in range(3))
+
+
+def _interpolate_rows(img, rect):
+    """Fill rect from its four edges (bilinear Coons patch): keeps the shading
+    gradient of curved surfaces such as the mascot's chest."""
+    x0, y0, x1, y1 = rect
+    W, H = img.size
+    L = [img.getpixel((max(0, x0 - 1), y)) for y in range(y0, y1 + 1)]
+    R = [img.getpixel((min(W - 1, x1 + 1), y)) for y in range(y0, y1 + 1)]
+    T = [img.getpixel((x, max(0, y0 - 1))) for x in range(x0, x1 + 1)]
+    B = [img.getpixel((x, min(H - 1, y1 + 1))) for x in range(x0, x1 + 1)]
+    c00, c10 = img.getpixel((max(0, x0 - 1), max(0, y0 - 1))), img.getpixel((min(W - 1, x1 + 1), max(0, y0 - 1)))
+    c01, c11 = img.getpixel((max(0, x0 - 1), min(H - 1, y1 + 1))), img.getpixel((min(W - 1, x1 + 1), min(H - 1, y1 + 1)))
+    nw, nh = x1 - x0 + 2, y1 - y0 + 2
+    for j, y in enumerate(range(y0, y1 + 1)):
+        v = (j + 1) / nh
+        for i, x in enumerate(range(x0, x1 + 1)):
+            u = (i + 1) / nw
+            px = []
+            for k in range(3):
+                lin_u = L[j][k] * (1 - u) + R[j][k] * u
+                lin_v = T[i][k] * (1 - v) + B[i][k] * v
+                bil = (c00[k] * (1 - u) * (1 - v) + c10[k] * u * (1 - v) +
+                       c01[k] * (1 - u) * v + c11[k] * u * v)
+                px.append(max(0, min(255, round(lin_u + lin_v - bil))))
+            img.putpixel((x, y), tuple(px))
+
+
+def retouch_image(img, project, spec, d):
+    """Clear ``rect`` (fill colour or 'auto' = median of the surrounding pixels) and
+    optionally draw ``text`` centred in it."""
+    from PIL import ImageDraw
+    rect = [_int(x) for x in d['rect']]
+    if not (0 <= rect[0] <= rect[2] < img.size[0] and 0 <= rect[1] <= rect[3] < img.size[1]):
+        raise SpecError(f'retouch rect {rect} outside the {img.size[0]}x{img.size[1]} image')
+    fill = d.get('fill', 'auto')
+    dr = ImageDraw.Draw(img)
+    if fill == 'interpolate':
+        _interpolate_rows(img, rect)
+    else:
+        dr.rectangle(rect, fill=_border_color(img, rect) if fill == 'auto' else fill)
+    text = d.get('text')
+    if text:
+        f = _font(project, spec, d.get('font'), _int(d.get('size', 24)))
+        spacing = _int(d.get('spacing', 0))
+        stroke = _int(d.get('bold', 0))
+        widths = [dr.textlength(ch, font=f) for ch in text]
+        total = sum(widths) + spacing * (len(text) - 1)
+        asc, desc = f.getmetrics()
+        x = (rect[0] + rect[2]) / 2 - total / 2
+        y = (rect[1] + rect[3]) / 2 - (asc + desc) / 2 + _int(d.get('dy', 0))
+        color = d.get('color', '#FFFFFF')
+        for ch, w in zip(text, widths):
+            dr.text((x, y), ch, font=f, fill=color, stroke_width=stroke, stroke_fill=color)
+            x += w + spacing
+    return img
+
+
+def apply_retouch(project, spec, d):
+    target = d.get('target', 'page')
+    if target == 'page':
+        page = _int(d['page'])
+        if page not in project.images:
+            raise SpecError(f'retouch: page {page} has no image')
+        z = project.images[page]
+        z.set_image(retouch_image(z.to_image(upright=True), project, spec, d))
+    elif target == 'icon':
+        lib = project.icons.get(_int(d['lib']))
+        ic = lib.get(_int(d['id'])) if lib else None
+        if ic is None:
+            raise SpecError(f'retouch: icon {d.get("lib")}/{d.get("id")} not found')
+        lib.put(ic.id, retouch_image(ic.to_image(), project, spec, d))
+    else:
+        raise SpecError(f'retouch target must be page or icon, not {target!r}')
 
 
 def apply_page(project, spec, d, log):

@@ -8,13 +8,14 @@ Sections are applied in this order:
 
 1. `images`
 2. `image_patches`
-3. `remove_vars`
-4. `icons`
-5. `pages`
-6. `touch_edits`
-7. `field_colors`
-8. `recolor`
-9. `vp_defaults`
+3. `retouch`
+4. `remove_vars`
+5. `icons`
+6. `pages`
+7. `touch_edits`
+8. `field_colors`
+9. `recolor`
+10. `vp_defaults`
 
 ## `images`: replace page backgrounds
 
@@ -29,6 +30,21 @@ images:
 image_patches:
   - {page: 121, png: tile.png, pos: [255, 38]}
 ```
+
+## `retouch`: erase an area of a page or icon and redraw text
+
+```yaml
+retouch:
+  - {target: page, page: 1, rect: [148, 20, 332, 54], fill: "#000000",
+     text: KLIPPER, size: 30, spacing: 5, bold: 1, color: "#FFFFFF"}
+  - {target: icon, lib: 18, id: 4, rect: [109, 195, 149, 206], fill: interpolate,
+     text: KLIPPER, size: 9, color: "#8C8C8C"}
+```
+
+- `rect` is inclusive: upright panel coordinates for pages, icon pixels for icons.
+- `fill` is a colour, `auto` (median of the surrounding pixels) or `interpolate` (blends the four edges, which keeps shading gradients).
+- `font` defaults to `stock`, the input package's `truefont/font.ttf`, so labels match the UI. A path to any TTF also works.
+- `size` is in pixels, `spacing` is extra pixels between letters, `bold` is the stroke width, and `dy` nudges the text vertically.
 
 ## `remove_vars`: drop display fields
 

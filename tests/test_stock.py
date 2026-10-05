@@ -34,7 +34,7 @@ class StockTest(unittest.TestCase):
             self.assertEqual(tree_digest(STOCK), tree_digest(tmp))
 
     def test_examples_build(self):
-        for name in ('splash', 'machine_page', 'recolor_amber'):
+        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding'):
             with self.subTest(example=name):
                 prj = Project(STOCK)
                 apply(prj, load_spec(os.path.join(EXAMPLES, name, 'spec.yaml')), log=lambda *a: None)
@@ -43,6 +43,17 @@ class StockTest(unittest.TestCase):
                     again = Project(tmp)          # output must parse cleanly
                     self.assertEqual(again.touch.to_bytes(), prj.touch.to_bytes())
                     self.assertEqual(again.vars.to_bytes(), prj.vars.to_bytes())
+
+    def test_branding_only_touches_listed_files(self):
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_branding', 'spec.yaml')), log=lambda *a: None)
+        with tempfile.TemporaryDirectory() as tmp:
+            written = prj.save(tmp, changed_only=True)
+        expected = {'image/1.zbmp', 'image/108.zbmp', 'image/109.zbmp', 'icon/18.zico'}
+        if os.path.exists(os.path.join(EXAMPLES, 'klipper_branding', 'splash.png')):
+            expected.add('image/0.zbmp')
+        self.assertTrue(set(written) <= expected | {'image/0.zbmp'}, written)
+        self.assertTrue(expected - {'image/0.zbmp'} <= set(written), written)
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)
