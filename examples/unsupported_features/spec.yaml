@@ -1,0 +1,14 @@
+# Creality-only features go straight to the "not developed yet" popup.
+#
+# These tiles used to open a page locally before the host could react: a
+# confirm dialog (Reset configuration -> 111, Restore network -> 112) or the
+# CR-Touch test page (136). Their page switch is removed, so the tap only
+# reaches the bridge, which shows page 108. The return keys stay the same.
+
+touch_edits:
+  - match: {page: 121, vp: 0x400B, key: 0}     # Tune 2/2: Reset configuration
+    set: {page_next: null}
+  - match: {page: 121, vp: 0x4009, key: 0}     # Tune 2/2: Restore network
+    set: {page_next: null}
+  - match: {page: 132, vp: 0x4104, key: 9}     # ADV.SET: CR-Touch testing
+    set: {page_next: null}

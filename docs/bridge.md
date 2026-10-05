@@ -63,7 +63,7 @@ The emulator log has every touch (with coordinates), every page change and every
   - **Velocity limits:** X/Y max acceleration, speed and corner velocity (`SET_VELOCITY_LIMIT`).
   - **Language:** fixed by `language` in the config (English by default). Picks on the screen's language page are ignored and undone.
   - **Machine page (custom):** E-STOP, `FIRMWARE_RESTART`, `RESTART`.
-  - **Everything else** (Creality Wi-Fi/cloud, CR-Touch tests, power-loss recovery, home offsets, manual PID, steps/mm) shows the stock "not developed yet" popup.
+  - **Everything else** (Creality Wi-Fi/cloud, restore network, reset configuration, CR-Touch tests, power-loss recovery, home offsets, manual PID, steps/mm) shows the "not developed yet" popup.
 
 ## Assumptions to confirm on the real screen
 

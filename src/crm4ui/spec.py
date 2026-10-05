@@ -250,6 +250,21 @@ def apply(project, spec, log=print):
                 r.limits = (lo, hi)
         log(f'touch edit {m} -> {s} ({len(hits)} record(s))')
 
+    for d in spec.get('field_edits') or []:
+        page, vp = _int(d['page']), _int(d['vp'])
+        hits = [r for r in project.vars.pages.get(page, []) if r.vp == vp
+                and ('at' not in d or list(r.pos) == [_int(x) for x in d['at']])]
+        if len(hits) != 1:
+            raise SpecError(f'field_edits {d}: matches {len(hits)} fields (need exactly 1; add at: [x, y])')
+        r = hits[0]
+        if 'box' in d:                     # text fields: the box, and the position with it
+            box = _check_area(d['box'], 'field_edits')
+            r.box = box
+            r.pos = box[:2]
+        elif 'pos' in d:
+            r.pos = [_int(x) for x in d['pos']]
+        log(f'page {page}: field 0x{vp:04X} -> {d.get("box", d.get("pos"))}')
+
     for d in spec.get('field_colors') or []:
         n = 0
         color = _color565(d['color'])

@@ -399,7 +399,9 @@ class Bridge:
             self.set_page(ui.PAGE_FEED, 'runout: change filament')
 
     def k_popup_yes(self, k):
-        if k == 0xF1:
+        # 0: the Reset configuration / Restore network tile itself (klipper_ui UI);
+        # F1: "Yes" on the stock confirm dialog
+        if k in (0, 0xF1):
             self._not_supported()
 
     def k_preheat(self, k):
@@ -483,7 +485,7 @@ class Bridge:
             self.show_preview(self.files[i])
 
     def k_adv(self, k):
-        if k in (7, 8):
+        if k in (7, 8, 9):                 # 9: CR-Touch testing
             self._not_supported()
 
     def k_adv2(self, k):

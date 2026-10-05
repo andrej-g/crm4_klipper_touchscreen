@@ -15,7 +15,7 @@ Sections are applied in this order:
 6. `icons`
 7. `pages`
 8. `touch_edits`
-9. `field_colors`
+9. `field_edits`, then `field_colors`
 10. `recolor`
 11. `vp_defaults`
 
@@ -132,6 +132,16 @@ touch_edits:
 - Without `all: true` the match must hit exactly one record; with it, at least one.
 - `keyboard_page` is the page a numeric input (`data_input`) opens as its keypad.
 - `min` / `max` are the limits of a numeric input, in raw units (value × 10^decimals of the field). The screen rejects anything outside them.
+
+## `field_edits`: move or resize a display field
+
+```yaml
+field_edits:
+  - {page: 109, vp: 0x3168, box: [115, 412, 440, 440]}   # text field: new box (position follows)
+  - {page: 45, vp: 0x9020, pos: [100, 300], at: [100, 280]}   # any field: new position
+```
+
+`at` picks one field when several on the page share the VP.
 
 ## `field_colors`: set number/text/curve colours
 

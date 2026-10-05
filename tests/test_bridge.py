@@ -157,6 +157,14 @@ class BridgeTest(unittest.TestCase):
             self.key(b, ui.K_MACHINE, k)
         self.assertEqual([c[0] for c in self.moon.calls], ['emergency_stop', 'firmware_restart', 'restart'])
 
+    def test_creality_only_tiles(self):
+        b = self.make()
+        for vp, k in ((ui.K_RESET_CFG, 0), (ui.K_RESTORE_NET, 0), (ui.K_ADV, 9)):
+            self.link.sent.clear()
+            self.key(b, vp, k)
+            self.assertEqual(self.link.pages(), [ui.PAGE_NOT_SUPPORTED])
+        self.assertEqual(self.moon.calls, [])
+
     def test_language_is_fixed(self):
         b = self.make()
         self.key(b, ui.K_LANGUAGE, 2)                # tap "Deutsch" on a stock UI
