@@ -122,15 +122,16 @@ pages:
 ```yaml
 touch_edits:
   - match: {page: 121, vp: 0x403E, key: 9}     # must match exactly one record
-    set: {page_next: 45}                       # any of: vp, key, page_next, area, keyboard_page
+    set: {page_next: 45}                       # any of: vp, key, page_next, area, keyboard_page, min, max
   - match: {vp: 0x7048, kind: data_input}      # every nozzle-target input, on any page
     all: true
     set: {keyboard_page: 47}
 ```
 
-- `match` takes any of `page`, `vp`, `key` and `kind` (`return_key`, `data_input`, `increment`, `keyboard_key`).
+- `match` takes any of `page`, `vp`, `key`, `kind` (`return_key`, `data_input`, `increment`, `keyboard_key`), and the current `min` / `max` of a numeric input.
 - Without `all: true` the match must hit exactly one record; with it, at least one.
 - `keyboard_page` is the page a numeric input (`data_input`) opens as its keypad.
+- `min` / `max` are the limits of a numeric input, in raw units (value × 10^decimals of the field). The screen rejects anything outside them.
 
 ## `field_colors`: set number/text/curve colours
 

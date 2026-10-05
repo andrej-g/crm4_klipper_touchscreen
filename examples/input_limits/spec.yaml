@@ -1,0 +1,14 @@
+# Keypad limits.
+#
+# Each numeric input carries its own min/max in the touch config (13.bin); the
+# screen rejects values outside them. Creality set the nozzle target on the
+# Tune page to 185..300 (no low targets while printing), and the Print-page tile
+# is a clone of that input. Lower the minimum to 100 °C there. The Preheat and
+# Feed pages already accept 0..300 and are left alone.
+#
+# Values are raw: value x 10^decimals of the field (temperatures have none).
+
+touch_edits:
+  - match: {vp: 0x7048, kind: data_input, min: 185}    # Tune page, and the Print-page tile
+    all: true                                          # when print_page_shortcuts is in
+    set: {min: 100}

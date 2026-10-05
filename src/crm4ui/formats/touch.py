@@ -102,6 +102,16 @@ class TouchRecord:
             raise ValueError('keyboard_page only exists on numeric input (FE00) records')
         self.data[34:36] = struct.pack('>H', v)
 
+    @property
+    def limits(self):
+        """(min, max) a numeric input accepts, in raw units (value x 10^decimals)."""
+        return struct.unpack('>ii', self.data[50:58]) if self.kind == 'data_input' else None
+    @limits.setter
+    def limits(self, v):
+        if self.kind != 'data_input':
+            raise ValueError('limits only exist on numeric input (FE00) records')
+        self.data[50:58] = struct.pack('>ii', *v)
+
     def describe(self) -> dict:
         d = {'flags': self.flags, 'page': self.page, 'area': self.area,
              'page_next': self.page_next, 'page_on': self.page_on, 'kind': self.kind}

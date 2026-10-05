@@ -217,6 +217,9 @@ def apply(project, spec, log=print):
                                   key=_opt_int(m.get('key')))
         if 'kind' in m:
             hits = [r for r in hits if r.kind == m['kind']]
+        for i, k in enumerate(('min', 'max')):
+            if k in m:
+                hits = [r for r in hits if r.limits is not None and r.limits[i] == _int(m[k])]
         if e.get('all') and not hits:
             raise SpecError(f'touch_edits match {m} hit no records')
         if not e.get('all') and len(hits) != 1:
@@ -236,6 +239,15 @@ def apply(project, spec, log=print):
                     raise SpecError(f'touch_edits {m}: keyboard_page needs a numeric input, '
                                     f'page {r.page} has a {r.kind}')
                 r.keyboard_page = _int(s['keyboard_page'])
+            if 'min' in s or 'max' in s:
+                if r.kind != 'data_input':
+                    raise SpecError(f'touch_edits {m}: min/max need a numeric input, '
+                                    f'page {r.page} has a {r.kind}')
+                lo, hi = r.limits
+                lo, hi = _int(s.get('min', lo)), _int(s.get('max', hi))
+                if lo > hi:
+                    raise SpecError(f'touch_edits {m}: min {lo} > max {hi}')
+                r.limits = (lo, hi)
         log(f'touch edit {m} -> {s} ({len(hits)} record(s))')
 
     for d in spec.get('field_colors') or []:

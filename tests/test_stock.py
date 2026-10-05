@@ -34,7 +34,7 @@ class StockTest(unittest.TestCase):
             self.assertEqual(tree_digest(STOCK), tree_digest(tmp))
 
     def test_examples_build(self):
-        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'english_only', 'klipper_ui'):
+        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'english_only', 'input_limits', 'klipper_ui'):
             with self.subTest(example=name):
                 prj = Project(STOCK)
                 apply(prj, load_spec(os.path.join(EXAMPLES, name, 'spec.yaml')), log=lambda *a: None)
@@ -94,6 +94,14 @@ class StockTest(unittest.TestCase):
         self.assertEqual(len(prj.touch.find(page=121, vp=0x403E, key=5)), 1)      # other tiles stay
         self.assertFalse([r for r in prj.touch.records if r.page_next in (33, 120)])
         self.assertEqual(sum(1 for r in prj.vars.pages[121] if r.vp == 0x5247), 7)
+
+    def test_input_limits(self):
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
+        for page in (1, 14):
+            self.assertEqual(prj.touch.find(page=page, vp=0x7048)[0].limits, (100, 300))
+        self.assertEqual(prj.touch.find(page=19, vp=0x7048)[0].limits, (0, 300))
+        self.assertEqual(prj.touch.find(page=122, vp=0x7070)[0].limits, (185, 300))   # PID untouched
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)
