@@ -52,10 +52,16 @@ class ScreenSim:
         return raw.decode(dgus.TEXT_ENCODING, 'replace')
 
     # ---- bookkeeping ----------------------------------------------------------------
+    log_file = None                     # optional text file every log entry is appended to
+
     def _note(self, direction, frame, note=''):
         self.log_seq += 1
-        self.log.append((self.log_seq, time.strftime('%H:%M:%S'), direction,
-                         frame.to_bytes().hex(' ') if frame else '', note))
+        entry = (self.log_seq, time.strftime('%H:%M:%S'), direction,
+                 frame.to_bytes().hex(' ') if frame else '', note)
+        self.log.append(entry)
+        if self.log_file:
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(f'{entry[1]} {direction:9} page={self.page:<3} {note:30} {entry[3]}\n')
 
     def _bump(self):
         self.version += 1
@@ -112,6 +118,7 @@ class ScreenSim:
                 return None
             d = hit.describe()
             kind = hit.kind
+            self._note('local', None, f'touch ({x},{y}) page {self.page}: {kind}')
             if kind == 'return_key':
                 self.set_word(hit.vp, hit.key)
                 self._emit(dgus.reply_words(hit.vp, hit.key), f'key 0x{hit.vp:04X}={hit.key}')

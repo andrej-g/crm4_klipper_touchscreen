@@ -7,6 +7,7 @@ Open http://127.0.0.1:8090 and point the bridge at the link
 on a serial port instead (pyserial; e.g. one end of a com0com / socat pair).
 """
 import argparse
+import os
 import io
 import json
 import socket
@@ -208,9 +209,13 @@ def main(argv=None):
     ap.add_argument('--page', type=int, default=0, help='start page (default 0, the splash)')
     ap.add_argument('--lang', type=int, help='preset UI language VP 0x5247 (1 = English); normally the host sets it')
     ap.add_argument('--no-ack', action='store_true', help='do not answer VP writes with 5A A5 03 82 4F 4B')
+    ap.add_argument('--log', help='append every touch / frame / page change to this text file')
     a = ap.parse_args(argv)
 
     sim = ScreenSim(Project(a.private), start_page=a.page, lang=a.lang, ack_writes=not a.no_ack)
+    sim.log_file = a.log
+    if a.log:
+        os.makedirs(os.path.dirname(os.path.abspath(a.log)), exist_ok=True)
     link = Link(sim, a.link)
     link.start()
     host, _, port = a.http.rpartition(':')

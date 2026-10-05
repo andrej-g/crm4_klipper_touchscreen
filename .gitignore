@@ -26,3 +26,7 @@ crm4bridge.cfg
 
 # source artwork for make_boat.py (third-party; keep local)
 examples/klipper_branding/source/
+
+# troubleshooting logs
+logs/
+*.log

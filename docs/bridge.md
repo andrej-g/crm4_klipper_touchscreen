@@ -27,6 +27,15 @@ In dry-run the bridge reads everything (temperatures, files, metadata, print sta
 
 The emulator can also run a built UI (`crm4ui build … --out build/x` → `python -m crm4ui.emulator build/x`; untouched files must be present, so build without `--changed-only`). Use this to preview custom pages, for example `examples/machine_page` together with `machine_page = true`.
 
+## Logs for troubleshooting
+
+```sh
+python -m crm4ui.emulator build/klipper --log logs/emulator.log
+python -m crm4bridge --moonraker http://127.0.0.1:7125 --live --log-file logs/bridge.log
+```
+
+The emulator log has every touch (with coordinates), every page change and every frame in both directions, each line tagged with the page shown at the time. The bridge log, always at debug level, has state changes, every screen event, and the commands it sends (or would send).
+
 ## What the bridge does
 
 - **Startup / reconnect:**
