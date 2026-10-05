@@ -348,6 +348,13 @@ def retouch_image(img, project, spec, d):
     dr = ImageDraw.Draw(img)
     if fill == 'interpolate':
         _interpolate_rows(img, rect)
+    elif isinstance(fill, dict) and 'copy_from' in fill:
+        # copy a same-sized area of this image, top-left at copy_from (e.g. move an edge)
+        sx, sy = (_int(v) for v in fill['copy_from'])
+        w, h = rect[2] - rect[0] + 1, rect[3] - rect[1] + 1
+        if not (0 <= sx and sx + w <= img.size[0] and 0 <= sy and sy + h <= img.size[1]):
+            raise SpecError(f'retouch copy_from {[sx, sy]} + {w}x{h} outside the image')
+        img.paste(img.crop((sx, sy, sx + w, sy + h)), (rect[0], rect[1]))
     elif isinstance(fill, dict) and 'copy_column' in fill:
         # every row takes the colour of a clean reference column at the same height,
         # which rebuilds horizontal edges and bands (e.g. a card's top border)

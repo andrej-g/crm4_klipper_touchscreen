@@ -10,6 +10,8 @@
 
 retouch:
   - {target: page, page: 108, rect: [125, 175, 325, 316], fill: {copy_column: 400}}   # mascot
+  - {target: page, page: 108, rect: [0, 302, 479, 315], fill: {copy_from: [0, 216]}}  # card top edge, moved down
+  - {target: page, page: 108, rect: [0, 170, 479, 301], fill: "#000000"}              # old top of the card
   - {target: page, page: 108, rect: [70, 466, 414, 520], fill: "#B52C31",
      text: Ok, size: 28, color: "#FFFFFF"}
 

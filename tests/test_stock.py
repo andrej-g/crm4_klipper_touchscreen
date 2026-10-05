@@ -110,8 +110,9 @@ class StockTest(unittest.TestCase):
         self.assertEqual(sum(1 for r in prj.vars.pages[26] if r.vp == 0x5247 and list(r.pos) != [0, 0]) > 0, True)
         im = prj.images[108].to_image(upright=True).convert('RGB')
         card = im.getpixel((400, 250))
-        self.assertTrue(all(im.getpixel((x, 250)) == card for x in range(125, 326)))   # mascot gone
-        self.assertEqual(im.getpixel((200, 200)), (0, 0, 0))                           # above the card
+        self.assertEqual(card, (0, 0, 0))                                              # card starts lower now
+        self.assertTrue(all(im.getpixel((x, 330)) == im.getpixel((400, 330)) for x in range(40, 76)))
+        self.assertNotEqual(im.getpixel((400, 330)), (0, 0, 0))
         self.assertEqual(len(prj.touch.page(108)), 1)                                   # button kept
 
     def test_machine_page_contents(self):
