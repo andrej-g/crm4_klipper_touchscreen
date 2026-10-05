@@ -6,7 +6,10 @@
 # Where "CREALITY" appears in the stock UI:
 #   page 0          boot splash                 -> replaced by splash.png
 #   page 1          header wordmark             -> retouched
-#   icons 18/4, 18/5 mascot chest (main, printing, preview pages; normal + dimmed)
+#   icons 18/4, 18/5 mascot (main, printing, preview pages; normal + dimmed)
+#                   -> replaced by an original printed-tugboat icon (make_boat.py).
+#                   It is a decorative placeholder, not a progress indicator; on the
+#                   printing and preview pages it fills the 300x300 thumbnail area.
 #   pages 108, 109  "not developed" / warning character, chest print
 
 # Splash: put the Klipper logo SVG here as klipper-logo.svg, run make_splash.py,
@@ -17,11 +20,11 @@
 retouch:
   - {target: page, page: 1, rect: [148, 20, 332, 54], fill: "#000000",
      text: KLIPPER, size: 30, spacing: 5, bold: 1, color: "#FFFFFF"}
-  - {target: icon, lib: 18, id: 4, rect: [109, 195, 149, 206], fill: interpolate,
-     text: KLIPPER, size: 9, color: "#8C8C8C"}
-  - {target: icon, lib: 18, id: 5, rect: [109, 195, 149, 206], fill: interpolate,
-     text: KLIPPER, size: 9, color: "#3C3C3C"}
   - {target: page, page: 108, rect: [247, 270, 278, 278], fill: "#FFFFFF",
      text: KLIPPER, size: 6, color: "#3C3C3C"}
   - {target: page, page: 109, rect: [227, 293, 258, 300], fill: "#FFFFFF",
      text: KLIPPER, size: 6, color: "#3C3C3C"}
+
+icons:
+  - {lib: 18, id: 4, png: boat.png}
+  - {lib: 18, id: 5, png: boat_dim.png}
