@@ -7,7 +7,8 @@
 #   page 0          boot splash                 -> replaced by splash.png
 #   page 1          header wordmark             -> retouched
 #   icons 18/4, 18/5 mascot (main, printing, preview pages; normal + dimmed)
-#                   -> replaced by an original printed-tugboat icon (make_boat.py).
+#                   -> replaced by a Benchy silhouette with print layer lines, traced
+#                      from a source image by make_boat.py (source kept out of git).
 #                   It is a decorative placeholder, not a progress indicator; on the
 #                   printing and preview pages it fills the 300x300 thumbnail area.
 #   pages 108, 109  "not developed" / warning character, chest print
