@@ -34,7 +34,7 @@ class StockTest(unittest.TestCase):
             self.assertEqual(tree_digest(STOCK), tree_digest(tmp))
 
     def test_examples_build(self):
-        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'english_only', 'input_limits', 'popup_cleanup', 'unsupported_features', 'klipper_ui'):
+        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'english_only', 'input_limits', 'popup_cleanup', 'unsupported_features', 'spoolman', 'klipper_ui'):
             with self.subTest(example=name):
                 prj = Project(STOCK)
                 apply(prj, load_spec(os.path.join(EXAMPLES, name, 'spec.yaml')), log=lambda *a: None)
@@ -121,6 +121,23 @@ class StockTest(unittest.TestCase):
                               (132, 0x4104, 9), (132, 0x4105, 8), (122, 0x401F, 5), (125, 0x401F, 5)):
             self.assertIsNone(prj.touch.find(page=page, vp=vp, key=key)[0].page_next)
         self.assertEqual(prj.touch.find(page=21, vp=0x403E, key=8)[0].page_next, 122)
+
+    def test_spoolman_tile(self):
+        from crm4bridge import spoolman
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
+        for i in range(len(spoolman.COLOURS)):
+            self.assertIsNotNone(prj.icons[18].get(20 + i))
+        for i in range(len(spoolman.MATERIALS)):
+            self.assertIsNotNone(prj.icons[18].get(50 + i))
+        vps = {r.vp for r in prj.vars.pages[1]}
+        self.assertTrue({0x9100, 0x9101, 0x9110, 0x9120} <= vps)
+        for page in (9, 10, 11, 12):
+            self.assertTrue({0x9100, 0x9101, 0x9130, 0x9140} <= {r.vp for r in prj.vars.pages[page]})
+        sw = [r for r in prj.vars.pages[1] if r.vp == 0x9101][0].describe()
+        self.assertEqual((sw['v_min'], sw['v_max'], sw['icon_min'], sw['icon_max'], sw['icon_lib']),
+                         (0, len(spoolman.COLOURS) - 1, 20, 20 + len(spoolman.COLOURS) - 1, 18))
+        self.assertEqual([r.pos for r in prj.vars.pages[1] if r.vp == 0x4227], [[90, 280]])
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)

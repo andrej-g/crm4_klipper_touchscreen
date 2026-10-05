@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from crm4ui import dgus
 
-from . import ui
+from . import spoolman, ui
 from .config import State
 from .link import ScreenLink
 from .moonraker import Moonraker, MoonrakerError
@@ -51,6 +51,8 @@ class Bridge:
         self.page = None
         self.page_before_popup = ui.PAGE_MAIN
         self.boot_anim = 0
+        self.next_spool_poll = 0.0
+        self.spool_key = None            # (connected, spool_id) last fetched
         self.jobs = ThreadPoolExecutor(1, thread_name_prefix='klipper-action')
         self.stop = threading.Event()
         self._repaint = threading.Event()
@@ -87,6 +89,7 @@ class Bridge:
     def _on_screen_connect(self):
         with self.cache_lock:
             self.cache.clear()
+        self.next_spool_poll = 0.0
         self._repaint.set()
 
     # ======================================================================== actions
@@ -220,6 +223,49 @@ class Bridge:
             self.boot_anim = (self.boot_anim + 10) % 110
             self.word(ui.VP_BOOT_PROGRESS, min(self.boot_anim, 100))
         self.text(ui.TXT_MACHINE_STATE, f'{klippy}: {self.klippy_msg}'[:40] if self.klippy_msg else klippy)
+        if klippy != 'offline':
+            self.poll_spoolman()
+
+    # ======================================================================== Spoolman
+    def poll_spoolman(self, force=False):
+        """Active spool -> tile on the Print and printing pages (examples/spoolman)."""
+        if not self.cfg.spoolman:
+            return
+        now = time.monotonic()
+        if not force and now < self.next_spool_poll:
+            return
+        self.next_spool_poll = now + self.cfg.spoolman_interval
+        try:
+            st = self.moon.spoolman_status() or {}
+        except MoonrakerError as e:
+            log.debug('spoolman status: %s', e)
+            return self.push_spool(None, 'Spoolman not available')
+        if not st.get('spoolman_connected'):
+            return self.push_spool(None, 'Spoolman offline')
+        sid = st.get('spool_id')
+        if sid is None:
+            return self.push_spool(None)
+        try:
+            spool = self.moon.spoolman_spool(sid)
+        except MoonrakerError as e:
+            log.debug('spoolman spool %s: %s', sid, e)
+            return self.push_spool(None, f'Spool {sid}: not found')
+        if (True, sid) != self.spool_key:
+            log.info('active spool %s: %s', sid, (spool.get('filament') or {}).get('name'))
+        self.spool_key = (True, sid)
+        self.push_spool(spool)
+
+    def push_spool(self, spool, message=None):
+        d = spoolman.describe(spool, name_len=ui.TXT_SPOOL_NAME[1], detail_len=ui.TXT_SPOOL_DETAIL[1],
+                              short_len=ui.TXT_SPOOL_SHORT[1])
+        if message:
+            d['name'] = d['short'] = message
+        self.word(ui.VP_SPOOL_BADGE, d['badge'])
+        self.word(ui.VP_SPOOL_SWATCH, d['swatch'])
+        self.text(ui.TXT_SPOOL_NAME, d['name'])
+        self.text(ui.TXT_SPOOL_DETAIL, d['detail'])
+        self.text(ui.TXT_SPOOL_SHORT, d['short'])
+        self.text(ui.TXT_SPOOL_WEIGHT, d['weight'])
 
     def _klippy_changed(self, klippy):
         old, self.klippy = self.klippy, klippy

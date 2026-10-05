@@ -54,6 +54,9 @@ class FakeMoon:
     def history_totals(self):
         return {'job_totals': {'total_print_time': 3600}}
 
+    def spoolman_status(self):
+        return {'spoolman_connected': False, 'spool_id': None}       # see test_spoolman.py
+
     def query(self, objects):
         return {k: v for k, v in self.status.items() if k in objects}
 

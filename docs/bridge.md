@@ -62,6 +62,7 @@ The emulator log has every touch (with coordinates), every page change and every
   - **PID:** autotune for nozzle and bed (`PID_CALIBRATE`, then `SAVE_CONFIG` on Yes). The Temp PID tile opens the nozzle autotune page.
   - **Velocity limits:** X/Y max acceleration, speed and corner velocity (`SET_VELOCITY_LIMIT`).
   - **Language:** fixed by `language` in the config (English by default). Picks on the screen's language page are ignored and undone.
+  - **Spoolman:** the active spool (`/server/spoolman/status`, then `GET /v1/spool/<id>` through `/server/spoolman/proxy`) every `spoolman_interval` seconds: material badge, nearest colour swatch, name, remaining weight / length and vendor. "No active spool", "Spoolman offline" and "Spoolman not available" (no `[spoolman]` in Moonraker) are shown in the name line. `spoolman = false` turns it off. Badges: PLA, PETG, PLA-M (material or name says matte), PLA-CF and PETG-CF (CF or carbon); any other material gets no badge and its name in front of the spool name. See `crm4bridge/spoolman.py`.
   - **Machine page (custom):** E-STOP, `FIRMWARE_RESTART`, `RESTART`.
   - **Everything else** shows the "not developed yet" popup: Creality Wi-Fi/cloud, restore network, reset configuration, feedback, CR-Touch tests, improved accuracy, auto leveling data, power-loss recovery, home offsets, manual PID and PID cycle counts, steps/mm, Z/E velocity limits, auto sleep and volume. With the `klipper_ui` build these tiles no longer open their own pages first (`examples/unsupported_features`).
 

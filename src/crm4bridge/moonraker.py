@@ -15,9 +15,12 @@ class Moonraker:
         self.api_key = api_key
         self.timeout = timeout
 
-    def _req(self, method, path, params=None, timeout=None):
+    def _req(self, method, path, params=None, timeout=None, json_body=None):
         q = ('?' + urllib.parse.urlencode(params, safe=',')) if params else ''
-        req = urllib.request.Request(self.url + path + q, method=method)
+        data = json.dumps(json_body).encode() if json_body is not None else None
+        req = urllib.request.Request(self.url + path + q, data=data, method=method)
+        if data is not None:
+            req.add_header('Content-Type', 'application/json')
         if self.api_key:
             req.add_header('X-Api-Key', self.api_key)
         try:
@@ -59,6 +62,31 @@ class Moonraker:
 
     def history_totals(self):
         return self.get('/server/history/totals')
+
+    # ---- Spoolman (through Moonraker's [spoolman] component) ------------------------------
+    def spoolman_status(self):
+        """{'spoolman_connected': bool, 'spool_id': int | None, 'pending_reports': [...]}"""
+        return self.get('/server/spoolman/status', timeout=3)
+
+    def spoolman_set_spool(self, spool_id):
+        return self._req('POST', '/server/spoolman/spool_id', json_body={'spool_id': spool_id})
+
+    def spoolman_request(self, method, path, query=None, body=None):
+        """Spoolman API call through Moonraker's proxy, e.g. ('GET', '/v1/spool/13')."""
+        req = {'use_v2_response': True, 'request_method': method, 'path': path}
+        if query:
+            req['query'] = query
+        if body is not None:
+            req['body'] = body
+        res = self._req('POST', '/server/spoolman/proxy', json_body=req, timeout=5)
+        if isinstance(res, dict) and 'response' in res:
+            if res.get('error'):
+                raise MoonrakerError(f"Spoolman: {res['error'].get('message', res['error'])}")
+            return res['response']
+        return res
+
+    def spoolman_spool(self, spool_id):
+        return self.spoolman_request('GET', f'/v1/spool/{int(spool_id)}')
 
     # ---- actions -------------------------------------------------------------------------
     def gcode(self, script, timeout=600):

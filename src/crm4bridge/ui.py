@@ -124,3 +124,11 @@ K_LANGUAGE = 0x4248    # 0..8
 K_MACHINE = 0x9000     # custom page: 1 e-stop, 2 firmware restart, 3 restart
 
 LANG_KEY_TO_INDEX = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}
+
+# ---- Spoolman tile (examples/spoolman) ---------------------------------------------------------
+VP_SPOOL_BADGE = 0x9100            # crm4bridge.spoolman.MATERIALS index
+VP_SPOOL_SWATCH = 0x9101           # crm4bridge.spoolman.COLOURS index
+TXT_SPOOL_NAME = (0x9110, 28)
+TXT_SPOOL_DETAIL = (0x9120, 28)
+TXT_SPOOL_SHORT = (0x9130, 22)
+TXT_SPOOL_WEIGHT = (0x9140, 8)

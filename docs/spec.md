@@ -113,6 +113,7 @@ pages:
 ```
 
 - `clone` copies an existing touch record (numeric input, increment, …) onto this page with a new area: `{type: clone, from_page: 14, vp: 0x7048, area: [14, 80, 234, 139]}`, optionally with `key` to disambiguate, `page_next` to override, and `keyboard_page` to open a different keypad page.
+- `clone` vars copy an existing field (`from_page`, `vp`) with any of: `pos`, `new_vp`, `color`; for text fields `box`, `length` and `font: [x dots, y dots]`; for icon variables `v_min`, `v_max`, `icon_min`, `icon_max` (defaults to `icon_min` + the value range) and `lib`.
 - `return_key` sends `5A A5 06 83 <vp> 01 <key>` to the host when released. `page_next` switches page locally as well.
 - `text` / `number` are cloned from a stock record of the same type (font, alignment), with the given fields replaced. Colours are RGB565.
 - Use VPs `0x9000–0x9FFF` for custom content. Neither the stock UI nor the Creality firmware uses them.

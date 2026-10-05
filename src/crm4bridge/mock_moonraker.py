@@ -21,6 +21,26 @@ FILES = [
     ('lito_x1_case_zaba.gcode', 9 * 3600 + 40 * 60, 98000.0, 590, 0.16),
 ]
 
+# (id, vendor, name, material, colour, remaining g, filament weight g)
+SPOOLS = [
+    (1, 'Generic', 'Basic White', 'PLA', 'FFFFFF', 640.0, 1000),
+    (2, 'Generic', 'Matte Sky Blue', 'PLA', '5FB0C7', 194.0, 1000),
+    (3, 'Generic', 'Hyper Speed Black', 'PETG', '313131', 227.0, 1000),
+    (4, 'Generic', 'Carbon Fibre Black', 'PLA-CF', '222222', 480.0, 1000),
+    (5, 'Generic', 'Tough Grey CF', 'PETG-CF', '757470', 900.0, 1000),
+    (6, 'Generic', 'Silk Gold Sample With A Very Long Name', 'PLA', 'C9A227', 20.0, 50),
+    (7, 'Generic', 'Translucent Red', 'ASA', 'BF4140', 750.0, 1000),
+]
+
+
+def spool_json(s):
+    sid, vendor, name, mat, colour, rem, weight = s
+    return {'id': sid, 'remaining_weight': rem, 'used_weight': weight - rem,
+            'remaining_length': rem / (1.24 * 3.1416 * 0.0875 ** 2) * 10,     # 1.75 mm, ~1.24 g/cm3, mm
+            'archived': False, 'location': 'Shelf',
+            'filament': {'id': sid, 'name': name, 'material': mat, 'color_hex': colour, 'weight': weight,
+                         'density': 1.24, 'diameter': 1.75, 'vendor': {'id': 1, 'name': vendor}}}
+
 
 class Printer:
     def __init__(self, print_seconds):
@@ -41,6 +61,9 @@ class Printer:
         self.progress = 0.0
         self.mtime = time.time()
         self.busy_until = 0
+        self.spools = [list(s) for s in SPOOLS]
+        self.spool_id = 3
+        self.spoolman_connected = True
 
     def tick(self, dt):
         with self.lock:
@@ -50,6 +73,9 @@ class Printer:
             if self.print['state'] == 'printing':
                 self.print['print_duration'] += dt
                 self.progress = min(1.0, self.progress + dt / self.print_seconds)
+                for s in self.spools:                       # ~0.05 g/s on the active spool
+                    if s[0] == self.spool_id:
+                        s[5] = max(0.0, s[5] - 0.05 * dt)
                 if self.progress >= 1.0:
                     self.print['state'] = 'complete'
 
@@ -149,6 +175,27 @@ def make_handler(pr: Printer):
             self.end_headers()
             self.wfile.write(body)
 
+        def _spoolman_proxy(self, q):
+            if not pr.spoolman_connected:
+                return self._ok('Spoolman not connected', 503)
+            method, path = q.get('request_method', 'GET'), q.get('path', '')
+
+            def answer(resp, err=None):
+                if q.get('use_v2_response') in (True, 'true', 'True', 1):
+                    return self._ok({'response': resp, 'response_headers': {}, 'error': err})
+                return self._ok(resp) if err is None else self._ok(err['message'], err['status_code'])
+            with pr.lock:
+                spools = {s[0]: spool_json(s) for s in pr.spools}
+            if method == 'GET' and path == '/v1/spool':
+                return answer(list(spools.values()))
+            m = re.fullmatch(r'/v1/spool/(\d+)', path)
+            if method == 'GET' and m:
+                s = spools.get(int(m.group(1)))
+                if s is None:
+                    return answer(None, {'status_code': 404, 'message': f'No spool with ID {m.group(1)}'})
+                return answer(s)
+            return answer(None, {'status_code': 404, 'message': f'mock: {method} {path} not implemented'})
+
         def do_GET(self):
             u = urlparse(self.path)
             q = {k: v[0] for k, v in parse_qs(u.query, keep_blank_values=True).items()}
@@ -170,6 +217,11 @@ def make_handler(pr: Printer):
                         return self._ok({'filename': name, 'estimated_time': est, 'filament_total': fil,
                                          'object_height': layers * lh, 'layer_height': lh})
                 return self._ok('file not found', 404)
+            if p == '/server/spoolman/status':
+                return self._ok({'spoolman_connected': pr.spoolman_connected, 'pending_reports': [],
+                                 'spool_id': pr.spool_id})
+            if p == '/server/spoolman/spool_id':
+                return self._ok({'spool_id': pr.spool_id})
             if p == '/server/history/totals':
                 return self._ok({'job_totals': {'total_print_time': 123.4 * 3600}})
             return self._ok('not found', 404)
@@ -178,6 +230,18 @@ def make_handler(pr: Printer):
             u = urlparse(self.path)
             q = {k: v[0] for k, v in parse_qs(u.query, keep_blank_values=True).items()}
             p = u.path
+            n = int(self.headers.get('Content-Length') or 0)
+            try:
+                body = json.loads(self.rfile.read(n) or b'{}') if n else {}
+            except ValueError:
+                body = {}
+            q.update({k: v for k, v in body.items()})
+            if p == '/server/spoolman/spool_id':
+                sid = q.get('spool_id')
+                pr.spool_id = int(sid) if sid not in (None, '', 'null') else None
+                return self._ok({'spool_id': pr.spool_id})
+            if p == '/server/spoolman/proxy':
+                return self._spoolman_proxy(q)
             if pr.klippy != 'ready' and p not in ('/printer/firmware_restart', '/printer/restart'):
                 return self._ok('Klippy not ready', 503)
             if p == '/printer/gcode/script':

@@ -1,0 +1,99 @@
+# Active Spoolman spool on the Print page and the printing pages.
+#
+#   Print page (1)        [swatch] [badge] spool name
+#                                          remaining g | m | vendor | #id
+#   printing pages 9-12   [swatch] [badge] spool name             remaining g
+#
+# The bridge reads the active spool through Moonraker (/server/spoolman/...)
+# and writes:
+#   0x9100  material badge (crm4bridge.spoolman.MATERIALS: none, PLA, PETG,
+#           PLA-M, PLA-CF, PETG-CF; other materials get no badge and their
+#           name in front of the spool name)
+#   0x9101  colour swatch (crm4bridge.spoolman.COLOURS, nearest of 23; 0 = empty ring)
+#   0x9110  name (28 chars), 0x9120 detail line (28), 0x9130 short name (22), 0x9140 weight (8)
+#
+# The tiles, badges and swatches are drawn by make_icons.py. They sit in the
+# free band between the status tiles and the Benchy / preview; on the Print page
+# the Benchy moves down 40 px to make room.
+
+image_patches:
+  - {page: 1, png: tile_print.png, pos: [14, 218]}
+  - {page: 9, png: tile_status.png, pos: [14, 215]}
+  - {page: 10, png: tile_status.png, pos: [14, 215]}
+  - {page: 11, png: tile_status.png, pos: [14, 215]}
+  - {page: 12, png: tile_status.png, pos: [14, 215]}
+
+icons:
+  - {lib: 18, id: 20, png: icons/swatch_00.png}
+  - {lib: 18, id: 21, png: icons/swatch_01.png}
+  - {lib: 18, id: 22, png: icons/swatch_02.png}
+  - {lib: 18, id: 23, png: icons/swatch_03.png}
+  - {lib: 18, id: 24, png: icons/swatch_04.png}
+  - {lib: 18, id: 25, png: icons/swatch_05.png}
+  - {lib: 18, id: 26, png: icons/swatch_06.png}
+  - {lib: 18, id: 27, png: icons/swatch_07.png}
+  - {lib: 18, id: 28, png: icons/swatch_08.png}
+  - {lib: 18, id: 29, png: icons/swatch_09.png}
+  - {lib: 18, id: 30, png: icons/swatch_10.png}
+  - {lib: 18, id: 31, png: icons/swatch_11.png}
+  - {lib: 18, id: 32, png: icons/swatch_12.png}
+  - {lib: 18, id: 33, png: icons/swatch_13.png}
+  - {lib: 18, id: 34, png: icons/swatch_14.png}
+  - {lib: 18, id: 35, png: icons/swatch_15.png}
+  - {lib: 18, id: 36, png: icons/swatch_16.png}
+  - {lib: 18, id: 37, png: icons/swatch_17.png}
+  - {lib: 18, id: 38, png: icons/swatch_18.png}
+  - {lib: 18, id: 39, png: icons/swatch_19.png}
+  - {lib: 18, id: 40, png: icons/swatch_20.png}
+  - {lib: 18, id: 41, png: icons/swatch_21.png}
+  - {lib: 18, id: 42, png: icons/swatch_22.png}
+  - {lib: 18, id: 43, png: icons/swatch_23.png}
+  - {lib: 18, id: 50, png: icons/badge_0.png}
+  - {lib: 18, id: 51, png: icons/badge_1.png}
+  - {lib: 18, id: 52, png: icons/badge_2.png}
+  - {lib: 18, id: 53, png: icons/badge_3.png}
+  - {lib: 18, id: 54, png: icons/badge_4.png}
+  - {lib: 18, id: 55, png: icons/badge_5.png}
+
+pages:
+  - id: 1
+    extend: true
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [26, 232], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [66, 233], v_min: 0, v_max: 5, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9110, box: [156, 223, 458, 243], length: 28, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9120, box: [156, 250, 458, 270], length: 28, font: [10, 20], color: "#A0A0A0"}
+  - id: 9
+    extend: true
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 5, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
+  - id: 10
+    extend: true
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 5, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
+  - id: 11
+    extend: true
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 5, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
+  - id: 12
+    extend: true
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 5, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
+
+field_edits:
+  - {page: 1, vp: 0x4227, pos: [90, 280], at: [90, 240]}     # Benchy down, below the spool tile
+
+vp_defaults:
+  - {vp: 0x9110, text: "Spoolman: waiting for host", bytes: 28}

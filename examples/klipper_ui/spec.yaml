@@ -8,3 +8,4 @@ include:
   - ../input_limits/spec.yaml
   - ../popup_cleanup/spec.yaml
   - ../unsupported_features/spec.yaml
+  - ../spoolman/spec.yaml

@@ -21,6 +21,8 @@ DEFAULTS = {
     'z_feedrate': '600',
     'extrude_feedrate': '300',
     'machine_page': 'false',
+    'spoolman': 'true',
+    'spoolman_interval': '10',
 }
 
 DEFAULT_PRESETS = {'PLA': (200, 60), 'ABS': (240, 100), 'PETG': (235, 75), 'TPU': (225, 50),
@@ -55,6 +57,8 @@ class Config:
         self.z_feedrate = b.getint('z_feedrate')
         self.extrude_feedrate = b.getint('extrude_feedrate')
         self.machine_page = b.getboolean('machine_page')
+        self.spoolman = b.getboolean('spoolman')
+        self.spoolman_interval = b.getfloat('spoolman_interval')
         self.presets = dict(DEFAULT_PRESETS)
         if cp.has_section('presets'):
             canon = {k.lower(): k for k in DEFAULT_PRESETS}

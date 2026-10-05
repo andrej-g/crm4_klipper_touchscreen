@@ -6,6 +6,7 @@ spec file. Integers may be written as ``0x9010`` (YAML) or ``"0x9010"`` (JSON).
 import io
 import json
 import os
+import struct
 
 from PIL import Image
 
@@ -109,6 +110,26 @@ def build_clone(project, d):
         r.pos = [_int(x) for x in d['pos']]
     if 'new_vp' in d:
         r.vp = _int(d['new_vp'])
+    if 'color' in d:
+        r.color = _color565(d['color'])
+    if r.type == 0x11:                                # text: box, length, font size in dots
+        if 'box' in d:
+            r.box = _check_area(d['box'], 'clone')
+            r.pos = r.box[:2]
+        if 'length' in d:
+            r.text_len = _int(d['length'])
+        if 'font' in d:                               # [x dots, y dots], e.g. [10, 20]
+            r.data[26], r.data[27] = (_int(v) for v in d['font'])
+    elif r.type == 0x00:                              # icon variable: value range -> icon range
+        x = r.data
+        lo, hi = struct.unpack('>HH', x[12:16])
+        ilo, ihi = struct.unpack('>HH', x[16:20])
+        lo, hi = _int(d.get('v_min', lo)), _int(d.get('v_max', hi))
+        ilo = _int(d.get('icon_min', ilo))
+        ihi = _int(d.get('icon_max', ilo + hi - lo if 'icon_min' in d else ihi))
+        x[12:20] = struct.pack('>4H', lo, hi, ilo, ihi)
+        if 'lib' in d:
+            x[20] = _int(d['lib'])
     return r
 
 
