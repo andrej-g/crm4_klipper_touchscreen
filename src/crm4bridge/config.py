@@ -64,7 +64,7 @@ class Config:
 
 
 class State:
-    """Small persistent store for values the screen lets you edit (presets, lengths, language)."""
+    """Small persistent store for values the screen lets you edit (presets, lengths)."""
 
     def __init__(self, path):
         self.path = path

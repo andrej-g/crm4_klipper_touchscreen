@@ -157,6 +157,15 @@ class BridgeTest(unittest.TestCase):
             self.key(b, ui.K_MACHINE, k)
         self.assertEqual([c[0] for c in self.moon.calls], ['emergency_stop', 'firmware_restart', 'restart'])
 
+    def test_language_is_fixed(self):
+        b = self.make()
+        self.key(b, ui.K_LANGUAGE, 2)                # tap "Deutsch" on a stock UI
+        w = self.link.words()
+        self.assertEqual(w[ui.VP_LANGUAGE], 1)
+        self.assertEqual(w[ui.VP_LANG_CHECK[1]], 1)
+        self.assertEqual(w[ui.VP_LANG_CHECK[2]], 0)
+        self.assertIsNone(b.state.get('language'))
+
 
 class _Inline:
     def submit(self, fn):

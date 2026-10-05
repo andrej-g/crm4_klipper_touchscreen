@@ -61,7 +61,7 @@ The emulator log has every touch (with coordinates), every page change and every
   - **Bed mesh:** `mesh_gcode` from the auto-leveling page.
   - **PID:** autotune for nozzle and bed (`PID_CALIBRATE`, then `SAVE_CONFIG` on Yes).
   - **Velocity limits:** X/Y max acceleration, speed and corner velocity (`SET_VELOCITY_LIMIT`).
-  - **Language:** selection is remembered.
+  - **Language:** fixed by `language` in the config (English by default). Picks on the screen's language page are ignored and undone.
   - **Machine page (custom):** E-STOP, `FIRMWARE_RESTART`, `RESTART`.
   - **Everything else** (Creality Wi-Fi/cloud, CR-Touch tests, power-loss recovery, home offsets, manual PID, steps/mm) shows the stock "not developed yet" popup.
 

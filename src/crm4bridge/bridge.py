@@ -157,7 +157,7 @@ class Bridge:
 
     # ======================================================================== state -> screen
     def push_static(self):
-        self.word(ui.VP_LANGUAGE, self.state.get('language', self.cfg.language))
+        self.word(ui.VP_LANGUAGE, self.cfg.language)
         self.word(ui.VP_MASCOT, 4)
         for name, (vn, vb) in ui.PRESETS.items():
             n, b = self._preset(name)
@@ -178,7 +178,7 @@ class Bridge:
         self.text(ui.TXT_ABOUT['hw'], 'Klipper host')
 
     def _push_language_ticks(self):
-        lang = self.state.get('language', self.cfg.language)
+        lang = self.cfg.language
         for i, vp in enumerate(ui.VP_LANG_CHECK):
             self.word(vp, 1 if i == lang else 0)
         self.word(0x421E, lang)
@@ -510,10 +510,11 @@ class Bridge:
             self.set_page(ui.PAGE_SETTINGS, 'pid discarded')
 
     def k_language(self, k):
-        if 0 <= k <= 8:
-            self.state.set('language', k)
-            self.word(ui.VP_LANGUAGE, k)
-            self._push_language_ticks()
+        # The language is fixed by the config (English by default); the klipper_ui build
+        # removes the language tile, and on a stock UI a pick is ignored and undone.
+        log.info('language selection ignored (fixed to %d by the config)', self.cfg.language)
+        self.word(ui.VP_LANGUAGE, self.cfg.language)
+        self._push_language_ticks()
 
     def k_machine(self, k):
         if k == 1:

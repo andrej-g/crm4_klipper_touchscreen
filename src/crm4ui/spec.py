@@ -185,11 +185,20 @@ def apply(project, spec, log=print):
     for d in spec.get('remove_vars') or []:
         page, vp = _int(d['page']), _int(d['vp'])
         before = project.vars.pages.get(page, [])
-        after = [r for r in before if r.vp != vp]
+        pos = [_int(x) for x in d['pos']] if 'pos' in d else None
+        after = [r for r in before if not (r.vp == vp and (pos is None or list(r.pos) == pos))]
         if len(after) == len(before):
-            raise SpecError(f'remove_vars: no VP 0x{vp:04X} on page {page}')
+            raise SpecError(f'remove_vars: no VP 0x{vp:04X}{f" at {pos}" if pos else ""} on page {page}')
         project.vars.pages[page] = after
         log(f'page {page}: removed {len(before) - len(after)} field(s) on VP 0x{vp:04X}')
+
+    for d in spec.get('remove_touch') or []:
+        page = _int(d['page'])
+        hits = project.touch.find(page=page, vp=_opt_int(d.get('vp')), key=_opt_int(d.get('key')))
+        if not hits:
+            raise SpecError(f'remove_touch: no record matches {d}')
+        project.touch.records = [r for r in project.touch.records if not any(r is h for h in hits)]
+        log(f'page {page}: removed {len(hits)} touch record(s)')
 
     for d in spec.get('icons') or []:
         lib_id, icon_id = _int(d['lib']), _int(d['id'])

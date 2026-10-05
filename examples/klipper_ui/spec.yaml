@@ -4,3 +4,4 @@ include:
   - ../klipper_branding/spec.yaml
   - ../print_page_shortcuts/spec.yaml
   - ../keypad_titles/spec.yaml
+  - ../english_only/spec.yaml

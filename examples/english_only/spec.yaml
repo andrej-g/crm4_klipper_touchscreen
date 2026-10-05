@@ -1,0 +1,23 @@
+# English only: no language switching.
+#
+# - The screen starts in English (stock default is Chinese until the host sets
+#   the language VP), so the boot and error pages are English before the
+#   bridge connects.
+# - The "Language selection" tile on the Tune page (121) is removed: its touch
+#   area, its label and the tile graphic. The language pages (33, and the
+#   first-boot picker 120) stay in the package but nothing leads to them.
+#
+# The bridge always sets the language from its config (language = 1, English)
+# and ignores language picks, so a stock UI can't switch it either.
+
+vp_defaults:
+  - {vp: 0x5247, word: 1}                  # language: 1 = English
+
+remove_touch:
+  - {page: 121, vp: 0x403E, key: 4}        # Language selection tile -> page 33
+
+remove_vars:
+  - {page: 121, vp: 0x5247, pos: [16, 245]}   # its "Language selection" label
+
+retouch:
+  - {target: page, page: 121, rect: [5, 178, 237, 318], fill: "#000000"}   # the tile itself

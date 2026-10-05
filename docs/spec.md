@@ -11,7 +11,7 @@ Sections are applied in this order:
 2. `images`
 3. `image_patches`
 4. `retouch`
-5. `remove_vars`
+5. `remove_vars`, then `remove_touch`
 6. `icons`
 7. `pages`
 8. `touch_edits`
@@ -52,8 +52,18 @@ retouch:
 
 ```yaml
 remove_vars:
-  - {page: 121, vp: 0x4220}      # all fields on that VP on that page
+  - {page: 121, vp: 0x4220}                  # all fields on that VP on that page
+  - {page: 121, vp: 0x5247, pos: [16, 245]}  # only the one at that position
 ```
+
+## `remove_touch`: drop touch areas
+
+```yaml
+remove_touch:
+  - {page: 121, vp: 0x403E, key: 4}    # every record on the page matching vp/key (both optional)
+```
+
+Combine with `remove_vars` and `retouch` to take a tile off a page entirely (see `examples/english_only`).
 
 ## `icons`: replace or add icons
 

@@ -34,7 +34,7 @@ class StockTest(unittest.TestCase):
             self.assertEqual(tree_digest(STOCK), tree_digest(tmp))
 
     def test_examples_build(self):
-        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'klipper_ui'):
+        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'english_only', 'klipper_ui'):
             with self.subTest(example=name):
                 prj = Project(STOCK)
                 apply(prj, load_spec(os.path.join(EXAMPLES, name, 'spec.yaml')), log=lambda *a: None)
@@ -85,6 +85,15 @@ class StockTest(unittest.TestCase):
         b = prj.images[47].to_image(upright=True)
         self.assertNotEqual(a.crop((0, 0, 480, 100)).tobytes(), b.crop((0, 0, 480, 100)).tobytes())
         self.assertEqual(a.crop((0, 100, 480, 800)).tobytes(), b.crop((0, 100, 480, 800)).tobytes())
+
+    def test_english_only(self):
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
+        self.assertEqual(prj.vpmem.get_word(0x5247), 1)
+        self.assertEqual(prj.touch.find(page=121, vp=0x403E, key=4), [])
+        self.assertEqual(len(prj.touch.find(page=121, vp=0x403E, key=5)), 1)      # other tiles stay
+        self.assertFalse([r for r in prj.touch.records if r.page_next in (33, 120)])
+        self.assertEqual(sum(1 for r in prj.vars.pages[121] if r.vp == 0x5247), 7)
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)
