@@ -6,7 +6,11 @@ Chromium through Playwright (``pip install playwright && playwright install chro
 The logo is centred in the upper part of the screen; the band at y 540..620
 stays clear for the stock boot progress bar (VP 0x4200).
 
-    python make_splash.py [klipper-logo.svg] [splash.png] [--width 340] [--bg "#000000"]
+    python make_splash.py [klipper-logo.svg] [splash.png] [--width 400] [--bg "#000000"]
+                          [--map "#3c4b5a=#ffffff"]
+
+--map recolours fills in the SVG before rendering (repeatable). The default
+turns the logo's dark grey white so it reads on the black splash.
 """
 import argparse
 import io
@@ -17,15 +21,17 @@ from PIL import Image
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def rasterise(svg_path, width):
+def rasterise(svg_path, width, colour_map=()):
+    svg = open(svg_path, 'rb').read().decode('utf-8')
+    for src, dst in colour_map:
+        svg = svg.replace(src.lower(), dst).replace(src.upper(), dst)
     try:
         import cairosvg
-        png = cairosvg.svg2png(url=svg_path, output_width=width)
+        png = cairosvg.svg2png(bytestring=svg.encode('utf-8'), output_width=width)
         return Image.open(io.BytesIO(png)).convert('RGBA')
     except ImportError:
         pass
     from playwright.sync_api import sync_playwright
-    svg = open(svg_path, 'rb').read().decode('utf-8')
     html = ('<html><body style="margin:0;background:transparent">'
             f'<div id="l" style="width:{width}px;display:inline-block;line-height:0">{svg}</div></body></html>')
     with sync_playwright() as p:
@@ -42,11 +48,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('svg', nargs='?', default=os.path.join(HERE, 'klipper-logo.svg'))
     ap.add_argument('out', nargs='?', default=os.path.join(HERE, 'splash.png'))
-    ap.add_argument('--width', type=int, default=340)
+    ap.add_argument('--width', type=int, default=400)
     ap.add_argument('--bg', default='#000000')
+    ap.add_argument('--map', action='append', default=None, help='SRC=DST fill colour replacement')
     a = ap.parse_args()
+    cmap = [m.split('=') for m in (a.map or ['#3c4b5a=#ffffff'])]
 
-    logo = rasterise(a.svg, a.width)
+    logo = rasterise(a.svg, a.width, cmap)
     bbox = logo.getbbox()
     if bbox:
         logo = logo.crop(bbox)

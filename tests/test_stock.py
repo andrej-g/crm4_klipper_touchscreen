@@ -44,16 +44,17 @@ class StockTest(unittest.TestCase):
                     self.assertEqual(again.touch.to_bytes(), prj.touch.to_bytes())
                     self.assertEqual(again.vars.to_bytes(), prj.vars.to_bytes())
 
-    def test_branding_only_touches_listed_files(self):
+    def test_branding(self):
         prj = Project(STOCK)
         apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_branding', 'spec.yaml')), log=lambda *a: None)
         with tempfile.TemporaryDirectory() as tmp:
-            written = prj.save(tmp, changed_only=True)
-        expected = {'image/1.zbmp', 'image/108.zbmp', 'image/109.zbmp', 'icon/18.zico'}
-        if os.path.exists(os.path.join(EXAMPLES, 'klipper_branding', 'splash.png')):
-            expected.add('image/0.zbmp')
-        self.assertTrue(set(written) <= expected | {'image/0.zbmp'}, written)
-        self.assertTrue(expected - {'image/0.zbmp'} <= set(written), written)
+            written = set(prj.save(tmp, changed_only=True))
+        self.assertTrue({'image/0.zbmp', 'image/1.zbmp', 'image/108.zbmp', 'image/109.zbmp',
+                         'icon/18.zico', 'bin/14.bin'} <= written, written)
+        # no green status text and no stock cyan accent left in the field colours
+        colours = {r.color for _, r in prj.vars.all() if r.color is not None}
+        self.assertNotIn(0x87F0, colours)
+        self.assertNotIn(0x87FF, colours)
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)

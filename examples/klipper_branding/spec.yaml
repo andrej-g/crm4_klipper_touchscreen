@@ -13,10 +13,13 @@
 #                   printing and preview pages it fills the 300x300 thumbnail area.
 #   pages 108, 109  "not developed" / warning character, chest print
 
-# Splash: put the Klipper logo SVG here as klipper-logo.svg, run make_splash.py,
-# then uncomment:
-# images:
-#   0: splash.png
+# Colours: the logo's dark grey is rendered white on the splash, and the
+# logo's red (#B12F35) replaces the stock cyan accent everywhere (tabs, buttons,
+# toggles, progress bars, outlines, the boat) and the green status text
+# (file name / print info on the printing and preview pages).
+
+images:
+  0: splash.png            # make_splash.py renders klipper-logo.svg (grey -> white)
 
 retouch:
   - {target: page, page: 1, rect: [148, 20, 332, 54], fill: "#000000",
@@ -29,3 +32,13 @@ retouch:
 icons:
   - {lib: 18, id: 4, png: boat.png}
   - {lib: 18, id: 5, png: boat_dim.png}
+
+field_colors:
+  - {from: 0x87F0, color: "#B12F35"}       # green status text -> Klipper red
+
+recolor:
+  rules:
+    - {hue_from: [165, 215], from_color: "#42BED6", to_color: "#B12F35", min_saturation: 0.25}
+  images: true
+  icons: true
+  fields: true
