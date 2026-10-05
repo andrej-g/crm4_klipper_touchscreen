@@ -18,6 +18,7 @@
 # toggles, progress bars, outlines, the boat). Status text that was green (file
 # name / print info on the printing and preview pages) and the cyan error text
 # on page 109 become white: red text on black is hard to read on the panel.
+# The orange target temperatures become Klipper red.
 
 images:
   0: splash.png            # make_splash.py renders klipper-logo.svg (grey -> white)
@@ -37,6 +38,7 @@ icons:
 field_colors:
   - {from: 0x87F0, color: "#FFFFFF"}       # green status text -> white
   - {vp: 0x3168, color: "#FFFFFF"}         # error message (page 109) -> white
+  - {from: 0xFC00, color: "#B12F35"}       # orange target temperatures -> Klipper red
 
 recolor:
   rules:
