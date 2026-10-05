@@ -1,0 +1,36 @@
+# Adds a custom "Machine" page (id 45) reached from the Tune 2/2 page (121),
+# replacing the stock WiFi tile. The bridge on the Pi owns the custom VPs:
+#
+#   0x9000  return key   1 = EMERGENCY STOP (M112), 2 = FIRMWARE_RESTART, 3 = RESTART
+#   0x9010  text, 40 B   Klipper state line
+#   0x9040  text, 40 B   last message / error
+#
+# Custom VPs live in 0x9000-0x9FFF, which neither the stock UI nor the
+# Creality firmware uses.
+
+image_patches:
+  - page: 121              # WiFi tile -> "Machine" (tile spans 245,31..472,164)
+    png: machine_tile.png
+    pos: [255, 38]
+
+remove_vars:
+  - {page: 121, vp: 0x4220}   # the WiFi on/off switch icon on that tile
+
+touch_edits:
+  - match: {page: 121, vp: 0x403E, key: 0x0009}   # stock WiFi toggle
+    set: {page_next: 45}                          # now just opens page 45
+
+pages:
+  - id: 45
+    background: page45.png
+    touch:
+      - {type: page_jump, area: [0, 0, 200, 80], page: 121}            # back
+      - {type: return_key, area: [12, 100, 468, 220], vp: 0x9000, key: 1}
+      - {type: return_key, area: [12, 236, 468, 336], vp: 0x9000, key: 2}
+      - {type: return_key, area: [12, 352, 468, 452], vp: 0x9000, key: 3}
+    vars:
+      - {type: text, vp: 0x9010, box: [28, 530, 460, 575], color: 0xFFFF, length: 40}
+      - {type: text, vp: 0x9040, box: [28, 628, 460, 690], color: 0xFFFF, length: 40}
+
+vp_defaults:
+  - {vp: 0x9010, text: "waiting for host", bytes: 40}

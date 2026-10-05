@@ -1,0 +1,11 @@
+# Swap the stock cyan accent (hue ~190 deg) for amber across every page,
+# every icon and the field colours in 14.bin. Greys, black and white are
+# untouched (saturation below min_saturation).
+recolor:
+  rules:
+    - hue_from: [170, 210]
+      hue_to: 35
+      min_saturation: 0.25
+  images: true
+  icons: true
+  fields: true
