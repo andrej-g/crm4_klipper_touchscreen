@@ -85,6 +85,11 @@ class Moonraker:
             return res['response']
         return res
 
+    def spoolman_spools(self):
+        """All spools that aren't archived."""
+        res = self.spoolman_request('GET', '/v1/spool', query='allow_archived=false')
+        return list(res or [])
+
     def spoolman_spool(self, spool_id):
         return self.spoolman_request('GET', f'/v1/spool/{int(spool_id)}')
 

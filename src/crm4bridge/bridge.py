@@ -53,6 +53,9 @@ class Bridge:
         self.boot_anim = 0
         self.next_spool_poll = 0.0
         self.spool_key = None            # (connected, spool_id) last fetched
+        self.spools = []                 # spool picker: list, page, page to return to
+        self.spool_page = 0
+        self.spool_return = ui.PAGE_MAIN
         self.jobs = ThreadPoolExecutor(1, thread_name_prefix='klipper-action')
         self.stop = threading.Event()
         self._repaint = threading.Event()
@@ -255,6 +258,70 @@ class Bridge:
         self.spool_key = (True, sid)
         self.push_spool(spool)
 
+    # ---- spool picker
+    def k_spool(self, k):
+        rows = ui.SPOOL_ROWS
+        if k == 0x20:
+            try:
+                spools = self.moon.spoolman_spools()
+            except MoonrakerError as e:
+                log.warning('spool list: %s', e)
+                self.push_spool(None, 'Spoolman offline')
+                return
+            active = (self.spool_key or (None, None))[1]
+            # active first, then most recently used, then newest
+            spools.sort(key=lambda s: (s.get('id') != active, -_ts(s.get('last_used')), -(s.get('id') or 0)))
+            self.spools, self.spool_page = spools, 0
+            if self.page != ui.PAGE_SPOOLS:
+                self.spool_return = self.page if self.page is not None else ui.PAGE_MAIN
+            self.show_spools()
+            self.set_page(ui.PAGE_SPOOLS, 'spool picker')
+        elif k == 0:
+            self.set_page(self.spool_return, 'spool picker back')
+        elif k in (0x10, 0x11):
+            pages = max(1, -(-len(self.spools) // rows))
+            self.spool_page = max(0, min(pages - 1, self.spool_page + (1 if k == 0x11 else -1)))
+            self.show_spools()
+        elif 1 <= k <= rows:
+            i = self.spool_page * rows + k - 1
+            if i >= len(self.spools):
+                return
+            spool = self.spools[i]
+            sid = spool.get('id')
+            name = (spool.get('filament') or {}).get('name')
+
+            def done(ok):
+                if ok:
+                    if self.cfg.dry_run:
+                        self.push_spool(spool)       # show the pick even though nothing was sent
+                    else:
+                        self.poll_spoolman(force=True)
+                    self.set_page(self.spool_return, 'spool picked')
+            self._api(f'active spool -> {sid} ({name})', lambda: self.moon.spoolman_set_spool(sid), done)
+
+    def show_spools(self):
+        rows = ui.SPOOL_ROWS
+        pages = max(1, -(-len(self.spools) // rows))
+        active = (self.spool_key or (None, None))[1]
+        self.text(ui.TXT_SPOOL_PAGE, f'{self.spool_page + 1}/{pages}')
+        for r in range(rows):
+            i = self.spool_page * rows + r
+            if i < len(self.spools):
+                s = self.spools[i]
+                d = spoolman.describe(s, name_len=ui.TXT_SPOOL_ROW_NAME[r][1])
+                parts = (['active'] if s.get('id') == active else []) + \
+                    ([d['weight']] if d['weight'] else []) + \
+                    ([s['location']] if s.get('location') else []) + [f'#{s.get("id")}']
+                self.word(ui.VP_SPOOL_ROW_SWATCH[r], d['swatch'] + 1)
+                self.word(ui.VP_SPOOL_ROW_BADGE[r], d['badge'] + 1)
+                self.text(ui.TXT_SPOOL_ROW_NAME[r], d['name'])
+                self.text(ui.TXT_SPOOL_ROW_DETAIL[r], spoolman.fit(' | '.join(parts), ui.TXT_SPOOL_ROW_DETAIL[r][1]))
+            else:
+                self.word(ui.VP_SPOOL_ROW_SWATCH[r], 0)
+                self.word(ui.VP_SPOOL_ROW_BADGE[r], 0)
+                self.text(ui.TXT_SPOOL_ROW_NAME[r], '')
+                self.text(ui.TXT_SPOOL_ROW_DETAIL[r], '')
+
     def push_spool(self, spool, message=None):
         d = spoolman.describe(spool, name_len=ui.TXT_SPOOL_NAME[1], detail_len=ui.TXT_SPOOL_DETAIL[1],
                               short_len=ui.TXT_SPOOL_SHORT[1])
@@ -313,6 +380,7 @@ class Bridge:
         for vp in ui.VP_MAX_CORNER[:2]:
             self.word(vp, round(th.get('square_corner_velocity', 0)))
         self.word(ui.VP_TOGGLE_FAN, ui.TOGGLE_ON if s.get('fan', {}).get('speed', 0) > 0 else ui.TOGGLE_OFF)
+        self.word(ui.VP_FAN_PCT, round(s.get('fan', {}).get('speed', 0) * 100))
         if self.sensor_obj and self.sensor_obj in s:
             self.word(ui.VP_TOGGLE_RUNOUT, ui.TOGGLE_ON if s[self.sensor_obj].get('enabled') else ui.TOGGLE_OFF)
         if self.autolevel and self.autolevel[0] in s:
@@ -624,6 +692,10 @@ class Bridge:
     def v_speed(self, vp, v):
         self._gcode(f'M220 S{v}')
 
+    def v_fan(self, vp, v):
+        v = max(0, min(100, v))
+        self._gcode(f'M106 S{round(v * 255 / 100)}' if v else 'M107', f'fan {v} %')
+
     def v_zoffset(self, vp, v):
         homed = 'z' in (self.status.get('toolhead', {}).get('homed_axes') or '')
         self._gcode(f'SET_GCODE_OFFSET Z={v / 100:.2f}' + (' MOVE=1' if homed else ''))
@@ -712,6 +784,17 @@ class Bridge:
         self.set_page(ui.PAGE_FILE_PREVIEW, 'preview')
 
 
+def _ts(iso):
+    """Spoolman ISO timestamp -> sortable number (0 when missing)."""
+    if not iso:
+        return 0
+    import datetime
+    try:
+        return datetime.datetime.fromisoformat(str(iso).replace('Z', '+00:00')).timestamp()
+    except ValueError:
+        return 0
+
+
 KEYS = {
     ui.K_MAIN: Bridge.k_main, ui.K_TUNE: Bridge.k_tune, ui.K_STOP: Bridge.k_stop,
     ui.K_PAUSE: Bridge.k_pause, ui.K_RESUME: Bridge.k_resume,
@@ -720,7 +803,7 @@ KEYS = {
     ui.K_LEVEL: Bridge.k_level, ui.K_HOME: Bridge.k_home, ui.K_EXTRUDE: Bridge.k_extrude,
     ui.K_FILES: Bridge.k_files, ui.K_FILE_ROW: Bridge.k_file_row, ui.K_ADV: Bridge.k_adv,
     ui.K_ADV2: Bridge.k_adv2, ui.K_PID: Bridge.k_pid, ui.K_PID_NAV: Bridge.k_pid_nav,
-    ui.K_LANGUAGE: Bridge.k_language, ui.K_MACHINE: Bridge.k_machine,
+    ui.K_LANGUAGE: Bridge.k_language, ui.K_MACHINE: Bridge.k_machine, ui.K_SPOOL: Bridge.k_spool,
     0x410C: Bridge.k_not_supported,        # set home offsets
     0x405F: Bridge.k_resume_power_loss,    # "resume previous print?"
     0x1008: Bridge.k_page26,
@@ -729,7 +812,7 @@ KEYS = {
 
 VALUES = {
     ui.VP_NOZZLE_TARGET: Bridge.v_temp, ui.VP_BED_TARGET: Bridge.v_temp,
-    ui.VP_SPEED: Bridge.v_speed, ui.VP_ZOFFSET: Bridge.v_zoffset,
+    ui.VP_SPEED: Bridge.v_speed, ui.VP_FAN_PCT: Bridge.v_fan, ui.VP_ZOFFSET: Bridge.v_zoffset,
     ui.VP_POS_X: Bridge.v_move, ui.VP_POS_Y: Bridge.v_move, ui.VP_POS_Z: Bridge.v_move,
     ui.VP_FEED_LEN: Bridge.v_store, ui.VP_RETRACT_LEN: Bridge.v_store,
     ui.VP_PID_NOZZLE_TEMP: Bridge.v_store, ui.VP_PID_BED_TEMP: Bridge.v_store,

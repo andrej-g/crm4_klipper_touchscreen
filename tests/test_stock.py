@@ -74,7 +74,7 @@ class StockTest(unittest.TestCase):
         self.assertIn(48, prj.images)
         self.assertEqual(len([r for r in prj.touch.page(47) if r.kind == 'keyboard_key']),
                          len([r for r in prj.touch.page(40) if r.kind == 'keyboard_key']))
-        target = {0x7048: 47, 0x704C: 48}
+        target = {0x7048: 47, 0x704C: 48, 0x9070: 55}           # 0x9070: fan_speed
         for r in prj.touch.records:
             if r.kind == 'data_input':
                 self.assertEqual(r.keyboard_page, target.get(r.vp, 40), r.describe())
@@ -99,7 +99,7 @@ class StockTest(unittest.TestCase):
         prj = Project(STOCK)
         apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
         for page in (1, 14):
-            self.assertEqual(prj.touch.find(page=page, vp=0x7048)[0].limits, (100, 300))
+            self.assertEqual(prj.touch.find(page=page, vp=0x7048)[0].limits, (0, 300))
         self.assertEqual(prj.touch.find(page=19, vp=0x7048)[0].limits, (0, 300))
         self.assertEqual(prj.touch.find(page=122, vp=0x7070)[0].limits, (185, 300))   # PID untouched
 
@@ -138,6 +138,22 @@ class StockTest(unittest.TestCase):
         self.assertEqual((sw['v_min'], sw['v_max'], sw['icon_min'], sw['icon_max'], sw['icon_lib']),
                          (0, len(spoolman.COLOURS) - 1, 20, 20 + len(spoolman.COLOURS) - 1, 18))
         self.assertEqual([r.pos for r in prj.vars.pages[1] if r.vp == 0x4227], [[90, 280]])
+
+    def test_fan_speed_and_spool_picker(self):
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
+        for page in (14, 19):
+            fan = prj.touch.find(page=page, vp=0x9070)
+            self.assertEqual([(r.kind, r.keyboard_page, r.limits) for r in fan], [('data_input', 55, (0, 100))])
+            self.assertEqual(prj.touch.find(page=page, vp=0x4004 if page == 14 else 0x4030,
+                                            key=7 if page == 14 else 3), [])
+        self.assertEqual(sorted(r.key for r in prj.touch.page(56)), [0, 1, 2, 3, 4, 5, 6, 0x10, 0x11])
+        self.assertTrue(all(r.vp == 0x9060 for r in prj.touch.page(56)))
+        self.assertTrue(all(r.page_next is None for r in prj.touch.page(56)))
+        for page in (1, 9, 10, 11, 12):
+            self.assertEqual(len(prj.touch.find(page=page, vp=0x9060, key=0x20)), 1)
+        self.assertNotIn(0x40D3, {r.vp for r in prj.touch.page(56)})
+        self.assertEqual(len([r for r in prj.vars.pages[56] if 0x9200 <= r.vp < 0x9300]), 24)
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)

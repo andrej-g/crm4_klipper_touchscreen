@@ -37,7 +37,8 @@ def spool_json(s):
     sid, vendor, name, mat, colour, rem, weight = s
     return {'id': sid, 'remaining_weight': rem, 'used_weight': weight - rem,
             'remaining_length': rem / (1.24 * 3.1416 * 0.0875 ** 2) * 10,     # 1.75 mm, ~1.24 g/cm3, mm
-            'archived': False, 'location': 'Shelf',
+            'archived': False, 'location': 'Dryer' if sid == 3 else 'Shelf',
+            'last_used': f'2026-09-{28 - sid:02d}T10:00:00Z' if sid < 6 else None,
             'filament': {'id': sid, 'name': name, 'material': mat, 'color_hex': colour, 'weight': weight,
                          'density': 1.24, 'diameter': 1.75, 'vendor': {'id': 1, 'name': vendor}}}
 

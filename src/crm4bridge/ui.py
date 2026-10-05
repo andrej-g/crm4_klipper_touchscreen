@@ -134,3 +134,16 @@ TXT_SPOOL_NAME = (0x9110, 28)
 TXT_SPOOL_DETAIL = (0x9120, 28)
 TXT_SPOOL_SHORT = (0x9130, 22)
 TXT_SPOOL_WEIGHT = (0x9140, 8)
+
+# spool picker (page 56, examples/spoolman)
+PAGE_SPOOLS = 56
+K_SPOOL = 0x9060                   # 0x20 open, 1..6 row, 0x10 / 0x11 prev / next, 0 back
+TXT_SPOOL_PAGE = (0x9068, 8)
+SPOOL_ROWS = 6
+VP_SPOOL_ROW_SWATCH = [0x9201 + i for i in range(SPOOL_ROWS)]     # value = swatch + 1, 0 = empty
+VP_SPOOL_ROW_BADGE = [0x9211 + i for i in range(SPOOL_ROWS)]      # value = badge + 1
+TXT_SPOOL_ROW_NAME = [(0x9220 + 16 * i, 28) for i in range(SPOOL_ROWS)]
+TXT_SPOOL_ROW_DETAIL = [(0x9280 + 16 * i, 28) for i in range(SPOOL_ROWS)]
+
+# fan speed in percent (examples/fan_speed)
+VP_FAN_PCT = 0x9070

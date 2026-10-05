@@ -1,0 +1,41 @@
+# Fan speed in percent instead of an on/off switch.
+#
+# The fan tiles on the Tune page (14) and the Manual page (19) open a keypad
+# (page 55, titled "Fan speed", 0..100 %) and show the current speed. The bridge
+# owns VP 0x9070 (percent): it shows the part-cooling fan speed and turns an
+# entered value into M106 S<0..255>. The tiles get the "%" and pencil marks of
+# the Print speed tile; their on/off switch icon is removed.
+
+copy_pages:
+  - {from: 40, to: 55}
+
+retouch:
+  - {target: page, page: 55, rect: [20, 30, 459, 84], fill: "#000000",
+     text: Fan speed, size: 34, bold: 1, color: "#FFFFFF"}
+  - {target: page, page: 14, rect: [385, 239, 468, 317], fill: {copy_from: [150, 240]}}        # "%" + pencil
+  - {target: page, page: 19, rect: [386, 413, 469, 491], fill: {copy_from: [150, 240], page: 14}}
+
+remove_vars:
+  - {page: 14, vp: 0x4219}        # fan on/off switch icon
+  - {page: 19, vp: 0x4219}
+
+remove_touch:
+  - {page: 14, vp: 0x4004, key: 7}        # fan on/off
+  - {page: 19, vp: 0x4030, key: 3}
+
+pages:
+  - id: 14
+    extend: true
+    touch:
+      - {type: clone, from_page: 14, vp: 0x704E, area: [244, 229, 472, 362], keyboard_page: 55,
+         new_vp: 0x9070, min: 0, max: 100}
+    vars:
+      - {type: clone, from_page: 14, vp: 0x704E, new_vp: 0x9070, pos: [336, 244]}
+  - id: 19
+    extend: true
+    touch:
+      - {type: clone, from_page: 14, vp: 0x704E, area: [246, 403, 473, 537], keyboard_page: 55,
+         new_vp: 0x9070, min: 0, max: 100}
+    vars:
+      - {type: clone, from_page: 14, vp: 0x704E, new_vp: 0x9070, pos: [338, 418]}
+

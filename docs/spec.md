@@ -44,7 +44,7 @@ retouch:
 ```
 
 - `rect` is inclusive: upright panel coordinates for pages, icon pixels for icons.
-- `fill` is a colour, `auto` (median of the surrounding pixels), `interpolate` (blends the four edges, which keeps shading gradients) `{copy_column: X}` (each row takes the pixel at column X of the same row, which rebuilds horizontal edges such as a card's top border) or `{copy_from: [x, y]}` (copies the same-sized area whose top-left is x, y, e.g. to move an edge).
+- `fill` is a colour, `auto` (median of the surrounding pixels), `interpolate` (blends the four edges, which keeps shading gradients) `{copy_column: X}` (each row takes the pixel at column X of the same row, which rebuilds horizontal edges such as a card's top border) or `{copy_from: [x, y]}` (copies the same-sized area whose top-left is x, y, e.g. to move an edge; add `page: N` to copy from another page's background).
 - `font` defaults to `stock`, the input package's `truefont/font.ttf`, so labels match the UI. A path to any TTF also works.
 - `size` is in pixels, `spacing` is extra pixels between letters, `bold` is the stroke width, and `dy` nudges the text vertically.
 
@@ -112,7 +112,7 @@ pages:
       - {type: clone,  from_page: 1, vp: 0x7046, pos: [100, 400], new_vp: 0x9030}
 ```
 
-- `clone` copies an existing touch record (numeric input, increment, …) onto this page with a new area: `{type: clone, from_page: 14, vp: 0x7048, area: [14, 80, 234, 139]}`, optionally with `key` to disambiguate, `page_next` to override, and `keyboard_page` to open a different keypad page.
+- `clone` copies an existing touch record (numeric input, increment, …) onto this page with a new area: `{type: clone, from_page: 14, vp: 0x7048, area: [14, 80, 234, 139]}`, optionally with `key` to disambiguate, `page_next` to override, `keyboard_page` to open a different keypad page, and `new_vp` / `min` / `max` for a numeric input of your own.
 - `clone` vars copy an existing field (`from_page`, `vp`) with any of: `pos`, `new_vp`, `color`; for text fields `box`, `length` and `font: [x dots, y dots]`; for icon variables `v_min`, `v_max`, `icon_min`, `icon_max` (defaults to `icon_min` + the value range) and `lib`.
 - `return_key` sends `5A A5 06 83 <vp> 01 <key>` to the host when released. `page_next` switches page locally as well.
 - `text` / `number` are cloned from a stock record of the same type (font, alignment), with the given fields replaced. Colours are RGB565.

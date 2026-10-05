@@ -153,6 +153,13 @@ def build_touch(page, d, project=None):
             if r.kind != 'data_input':
                 raise SpecError('touch clone: keyboard_page needs a numeric input record')
             r.keyboard_page = _int(d['keyboard_page'])
+        if 'new_vp' in d:
+            r.vp = _int(d['new_vp'])
+        if 'min' in d or 'max' in d:
+            if r.kind != 'data_input':
+                raise SpecError('touch clone: min/max need a numeric input record')
+            lo, hi = r.limits
+            r.limits = (_int(d.get('min', lo)), _int(d.get('max', hi)))
         return r
     flags = _int(d.get('flags', 0x0C))
     if typ == 'return_key':
@@ -390,7 +397,13 @@ def retouch_image(img, project, spec, d):
         w, h = rect[2] - rect[0] + 1, rect[3] - rect[1] + 1
         if not (0 <= sx and sx + w <= img.size[0] and 0 <= sy and sy + h <= img.size[1]):
             raise SpecError(f'retouch copy_from {[sx, sy]} + {w}x{h} outside the image')
-        img.paste(img.crop((sx, sy, sx + w, sy + h)), (rect[0], rect[1]))
+        src = img
+        if 'page' in fill:                              # copy from another page's background
+            sp = _int(fill['page'])
+            if sp not in project.images:
+                raise SpecError(f'retouch copy_from: page {sp} has no image')
+            src = project.images[sp].to_image(upright=True)
+        img.paste(src.crop((sx, sy, sx + w, sy + h)), (rect[0], rect[1]))
     elif isinstance(fill, dict) and 'copy_column' in fill:
         # every row takes the colour of a clean reference column at the same height,
         # which rebuilds horizontal edges and bands (e.g. a card's top border)

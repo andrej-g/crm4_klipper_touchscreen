@@ -219,5 +219,67 @@ def _key(vp, k):
     return dgus.reply_words(vp, k)
 
 
+
+class SpoolPickerTest(BridgeSpoolmanTest):
+    def setUp(self):
+        super().setUp()
+        self.b.jobs = _Inline()
+        self.b.page = 1
+        self.b.poll_spoolman(force=True)
+
+    def rows(self):
+        w, t = self.screen()
+        return [t.get(vpn[0], '') for vpn in ui.TXT_SPOOL_ROW_NAME], w, t
+
+    def test_open_page_and_pick(self):
+        from crm4ui import dgus
+        self.b.handle_frame(dgus.reply_words(ui.K_SPOOL, 0x20))
+        names, w, t = self.rows()
+        self.assertEqual(names[0], 'Hyper Speed Black')                      # active first
+        self.assertEqual(names[1:3], ['Basic White', 'Matte Sky Blue'])        # then most recently used
+        self.assertTrue(t[ui.TXT_SPOOL_ROW_DETAIL[0][0]].startswith('active | 227 g | Dryer'))
+        self.assertEqual(spoolman.MATERIALS[w[ui.VP_SPOOL_ROW_BADGE[2]] - 1], 'PLA-M')
+        self.assertEqual(t[ui.TXT_SPOOL_PAGE[0]], '1/2')
+        self.b.handle_frame(dgus.reply_words(ui.K_SPOOL, 0x11))              # next page: 1 spool
+        names, w, t = self.rows()
+        self.assertEqual(t[ui.TXT_SPOOL_PAGE[0]], '2/2')
+        self.assertEqual([bool(n) for n in names], [True] + [False] * 5)
+        self.assertEqual(w[ui.VP_SPOOL_ROW_SWATCH[1]], 0)                    # empty row: no icon
+        self.b.handle_frame(dgus.reply_words(ui.K_SPOOL, 1))                 # pick it
+        self.assertNotEqual(self.pr.spool_id, 3)
+        picked = self.pr.spool_id
+        self.assertEqual(self.screen()[1][ui.TXT_SPOOL_NAME[0]],
+                         spoolman.describe(self.moon.spoolman_spool(picked))['name'])
+        pages = [f.payload()[3] for f in self.link.sent if f.vp == 0x0084]
+        self.assertEqual(pages[-2:], [ui.PAGE_SPOOLS, 1])                     # back where it came from
+
+    def test_back(self):
+        from crm4ui import dgus
+        self.b.page = 11
+        self.b.handle_frame(dgus.reply_words(ui.K_SPOOL, 0x20))
+        self.b.handle_frame(dgus.reply_words(ui.K_SPOOL, 0))
+        pages = [f.payload()[3] for f in self.link.sent if f.vp == 0x0084]
+        self.assertEqual(pages[-2:], [ui.PAGE_SPOOLS, 11])
+        self.assertEqual(self.pr.spool_id, 3)
+
+
+class FanTest(unittest.TestCase):
+    def test_fan_percent(self):
+        import test_bridge as tb
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        cfg = Config(None, {'dry_run': 'false', 'state_file': os.path.join(tmp.name, 's.json')})
+        moon, link = tb.FakeMoon(), tb.FakeLink()
+        b = Bridge(cfg, moon, link)
+        b.jobs = _Inline()
+        moon.status['fan'] = {'speed': 0.5}
+        b.poll()
+        self.assertEqual(link.words()[ui.VP_FAN_PCT], 50)
+        from crm4ui import dgus
+        for v in (40, 0, 100):
+            b.handle_frame(dgus.reply_words(ui.VP_FAN_PCT, v))
+        self.assertEqual([c[1] for c in moon.calls if c[0] == 'gcode'], ['M106 S102', 'M107', 'M106 S255'])
+
+
 if __name__ == '__main__':
     unittest.main()
