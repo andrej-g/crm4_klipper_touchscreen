@@ -6,12 +6,13 @@ Coordinates are panel coordinates: 480×800 portrait, origin top-left, as you se
 
 Sections are applied in this order:
 
+0. `include`: other specs applied first, in order (paths relative to this spec)
 1. `images`
 2. `image_patches`
 3. `retouch`
 4. `remove_vars`
 5. `icons`
-6. `pages`
+6. `copy_pages`, then `pages`
 7. `touch_edits`
 8. `field_colors`
 9. `recolor`
@@ -62,7 +63,24 @@ icons:
 
 Labels are icons in library 19 (and 29), one per language. An icon variable on VP `0x5247` shows `icon_min + language` (0 = Chinese, 1 = English, …, 8 = Turkish). Find ids with `crm4ui dump`.
 
-## `pages`: new pages (or rebuild an existing one with `replace: true`)
+## `include`: compose specs
+
+```yaml
+include:
+  - ../klipper_branding/spec.yaml
+  - ../print_page_shortcuts/spec.yaml
+```
+
+## `copy_pages`: duplicate a page under a new id
+
+```yaml
+copy_pages:
+  - {from: 115, to: 46}     # background, touch areas and fields
+```
+
+Typical use: a variant of a stock page whose back button goes somewhere else (combine with `touch_edits`).
+
+## `pages`: new pages, or rebuild (`replace: true`) or add to (`extend: true`) an existing one
 
 ```yaml
 pages:
@@ -78,6 +96,7 @@ pages:
       - {type: clone,  from_page: 1, vp: 0x7046, pos: [100, 400], new_vp: 0x9030}
 ```
 
+- `clone` copies an existing touch record (numeric input, increment, …) onto this page with a new area: `{type: clone, from_page: 14, vp: 0x7048, area: [14, 80, 234, 139]}`, optionally with `key` to disambiguate and `page_next` to override.
 - `return_key` sends `5A A5 06 83 <vp> 01 <key>` to the host when released. `page_next` switches page locally as well.
 - `text` / `number` are cloned from a stock record of the same type (font, alignment), with the given fields replaced. Colours are RGB565.
 - Use VPs `0x9000–0x9FFF` for custom content. Neither the stock UI nor the Creality firmware uses them.

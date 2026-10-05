@@ -114,9 +114,20 @@ def build_clone(project, d):
 VAR_BUILDERS = {'text': build_text, 'number': build_number, 'clone': build_clone}
 
 
-def build_touch(page, d):
+def build_touch(page, d, project=None):
     typ = d.get('type', 'return_key')
     area = _check_area(d['area'], 'touch')
+    if typ == 'clone':
+        # copy an existing record (numeric input, increment, ...) onto this page
+        src = project.touch.find(page=_int(d['from_page']), vp=_int(d['vp']),
+                                 key=_opt_int(d.get('key')))
+        if len(src) != 1:
+            raise SpecError(f'touch clone: page {d["from_page"]} VP {d["vp"]} matches {len(src)} records')
+        r = src[0].copy()
+        r.page, r.area = page, area
+        if 'page_next' in d:
+            r.page_next = _opt_int(d['page_next'])
+        return r
     flags = _int(d.get('flags', 0x0C))
     if typ == 'return_key':
         return TouchRecord.return_key(page, area, _int(d['vp']), _int(d['key']),
@@ -124,11 +135,16 @@ def build_touch(page, d):
                                       page_on=_opt_int(d.get('page_on')), flags=flags)
     if typ == 'page_jump':
         return TouchRecord.page_jump(page, area, _int(d['page']), flags=flags)
-    raise SpecError(f'unknown touch type {typ!r} (supported: return_key, page_jump)')
+    raise SpecError(f'unknown touch type {typ!r} (supported: return_key, page_jump, clone)')
 
 
 # ---- spec sections ----------------------------------------------------------------
 def apply(project, spec, log=print):
+    for inc in spec.get('include') or []:
+        path = _path(spec, inc)
+        log(f'include {inc}')
+        apply(project, load_spec(path), log)
+
     for k, p in (spec.get('images') or {}).items():
         page = _int(k)
         img = _load_png(spec, p, (PANEL_W, PANEL_H))
@@ -172,6 +188,10 @@ def apply(project, spec, log=print):
             raise SpecError(f'icon library {lib_id} does not exist')
         project.icons[lib_id].put(icon_id, _load_png(spec, d['png']))
         log(f'icon {lib_id}/{icon_id}: replaced from {d["png"]}')
+
+    for d in spec.get('copy_pages') or []:
+        copy_page(project, _int(d['from']), _int(d['to']))
+        log(f'page {d["from"]} copied to {d["to"]}')
 
     for d in spec.get('pages') or []:
         apply_page(project, spec, d, log)
@@ -327,13 +347,35 @@ def apply_retouch(project, spec, d):
         raise SpecError(f'retouch target must be page or icon, not {target!r}')
 
 
+def copy_page(project, src, dst):
+    """Duplicate a page (background, touch areas, fields) under a new id."""
+    from .formats import ZBmp
+    if not 0 <= dst <= 255:
+        raise SpecError('page id must be 0..255')
+    if dst in project.images or dst in project.vars.pages or project.touch.page(dst):
+        raise SpecError(f'copy_pages: page {dst} already exists')
+    if src not in project.images:
+        raise SpecError(f'copy_pages: page {src} does not exist')
+    z = project.images[src]
+    project.images[dst] = ZBmp(z.width, z.height, z.raw, z.header_tail)
+    for r in project.touch.page(src):
+        c = r.copy()
+        c.page = dst
+        project.touch.add(c)
+    for r in project.vars.pages.get(src, []):
+        project.vars.add(dst, r.copy())
+    if dst > project.vars.max_page:
+        project.vars.max_page = dst
+
+
 def apply_page(project, spec, d, log):
     page = _int(d['id'])
     if not 0 <= page <= 255:
         raise SpecError('page id must be 0..255')
     existing = page in project.images or page in project.vars.pages or project.touch.page(page)
-    if existing and not d.get('replace'):
-        raise SpecError(f'page {page} already exists; set replace: true to rebuild it')
+    if existing and not (d.get('replace') or d.get('extend')):
+        raise SpecError(f'page {page} already exists; set replace: true to rebuild it '
+                        'or extend: true to add to it')
     if d.get('replace'):
         project.touch.remove_page(page)
         project.vars.pages.pop(page, None)
@@ -350,7 +392,7 @@ def apply_page(project, spec, d, log):
         raise SpecError(f'page {page}: needs background, copy_background or fill')
 
     for t in d.get('touch') or []:
-        project.touch.add(build_touch(page, t))
+        project.touch.add(build_touch(page, t, project))
     for v in d.get('vars') or []:
         typ = v.get('type')
         if typ not in VAR_BUILDERS:
