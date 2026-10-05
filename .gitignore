@@ -1,0 +1,22 @@
+# Creality firmware packages and anything built from them stay out of the repo
+stock/
+build/
+out/
+*.zbmp
+*.zico
+*.zlib
+**/private/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+
+# editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
