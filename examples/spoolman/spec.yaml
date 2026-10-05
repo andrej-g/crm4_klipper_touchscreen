@@ -7,8 +7,8 @@
 # The bridge reads the active spool through Moonraker (/server/spoolman/...)
 # and writes:
 #   0x9100  material badge (crm4bridge.spoolman.MATERIALS: none, PLA, PETG,
-#           PLA-M, PLA-CF, PETG-CF; other materials get no badge and their
-#           name in front of the spool name)
+#           PLA-M, PLA-CF, PETG-CF, ABS, ASA, TPU, PA, PLA-W; other materials get
+#           no badge and their name in front of the spool name)
 #   0x9101  colour swatch (crm4bridge.spoolman.COLOURS, nearest of 23; 0 = empty ring)
 #   0x9110  name (28 chars), 0x9120 detail line (28), 0x9130 short name (22), 0x9140 weight (8)
 #
@@ -87,6 +87,11 @@ icons:
   - {lib: 18, id: 53, png: icons/badge_3.png}
   - {lib: 18, id: 54, png: icons/badge_4.png}
   - {lib: 18, id: 55, png: icons/badge_5.png}
+  - {lib: 18, id: 56, png: icons/badge_6.png}
+  - {lib: 18, id: 57, png: icons/badge_7.png}
+  - {lib: 18, id: 58, png: icons/badge_8.png}
+  - {lib: 18, id: 59, png: icons/badge_9.png}
+  - {lib: 18, id: 60, png: icons/badge_10.png}
 
 pages:
   - id: 1
@@ -95,7 +100,7 @@ pages:
       - {type: return_key, area: [14, 218, 466, 277], vp: 0x9060, key: 0x20}       # open the spool picker
     vars:
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [26, 232], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [66, 233], v_min: 0, v_max: 5, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [66, 233], v_min: 0, v_max: 10, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9110, box: [156, 223, 458, 243], length: 28, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9120, box: [156, 250, 458, 270], length: 28, font: [10, 20], color: "#A0A0A0"}
   - id: 9
@@ -104,7 +109,7 @@ pages:
       - {type: return_key, area: [14, 215, 466, 256], vp: 0x9060, key: 0x20}       # open the spool picker
     vars:
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 5, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 10, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
   - id: 10
@@ -113,7 +118,7 @@ pages:
       - {type: return_key, area: [14, 215, 466, 256], vp: 0x9060, key: 0x20}       # open the spool picker
     vars:
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 5, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 10, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
   - id: 11
@@ -122,7 +127,7 @@ pages:
       - {type: return_key, area: [14, 215, 466, 256], vp: 0x9060, key: 0x20}       # open the spool picker
     vars:
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 5, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 10, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
   - id: 12
@@ -131,7 +136,7 @@ pages:
       - {type: return_key, area: [14, 215, 466, 256], vp: 0x9060, key: 0x20}       # open the spool picker
     vars:
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 5, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 10, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
 
@@ -146,27 +151,27 @@ pages:
       - {type: return_key, area: [22, 592, 462, 678], vp: 0x9060, key: 6}
     vars:
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9201, pos: [32, 119], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9211, pos: [72, 120], v_min: 1, v_max: 6, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9211, pos: [72, 120], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9220, box: [160, 106, 405, 128], length: 28, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9280, box: [160, 142, 405, 164], length: 28, font: [10, 20], color: "#A0A0A0"}
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9202, pos: [32, 219], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9212, pos: [72, 220], v_min: 1, v_max: 6, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9212, pos: [72, 220], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9230, box: [160, 206, 405, 228], length: 28, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9290, box: [160, 242, 405, 264], length: 28, font: [10, 20], color: "#A0A0A0"}
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9203, pos: [32, 319], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9213, pos: [72, 320], v_min: 1, v_max: 6, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9213, pos: [72, 320], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9240, box: [160, 306, 405, 328], length: 28, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x92A0, box: [160, 342, 405, 364], length: 28, font: [10, 20], color: "#A0A0A0"}
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9204, pos: [32, 419], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9214, pos: [72, 420], v_min: 1, v_max: 6, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9214, pos: [72, 420], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9250, box: [160, 406, 405, 428], length: 28, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x92B0, box: [160, 442, 405, 464], length: 28, font: [10, 20], color: "#A0A0A0"}
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9205, pos: [32, 519], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9215, pos: [72, 520], v_min: 1, v_max: 6, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9215, pos: [72, 520], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9260, box: [160, 506, 405, 528], length: 28, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x92C0, box: [160, 542, 405, 564], length: 28, font: [10, 20], color: "#A0A0A0"}
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9206, pos: [32, 619], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
-      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9216, pos: [72, 620], v_min: 1, v_max: 6, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9216, pos: [72, 620], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9270, box: [160, 606, 405, 628], length: 28, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x92D0, box: [160, 642, 405, 664], length: 28, font: [10, 20], color: "#A0A0A0"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9068, box: [200, 730, 290, 762], length: 8, font: [14, 28], color: "#FFFFFF"}

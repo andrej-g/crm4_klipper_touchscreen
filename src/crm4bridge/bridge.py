@@ -50,6 +50,7 @@ class Bridge:
         self.selected = None
         self.page = None
         self.page_before_popup = ui.PAGE_MAIN
+        self.last_event = None
         self.boot_anim = 0
         self.next_spool_poll = 0.0
         self.spool_key = None            # (connected, spool_id) last fetched
@@ -125,6 +126,10 @@ class Bridge:
         self.jobs.submit(run)
 
     def _not_supported(self):
+        vp, v = self.last_event or (None, None)
+        back = ui.NOT_SUPPORTED_RETURN.get((vp, v), ui.NOT_SUPPORTED_RETURN.get((vp, None)))
+        if back is not None:
+            self.page_before_popup = back
         self.set_page(ui.PAGE_NOT_SUPPORTED, 'not supported under Klipper')
 
     def _printing_page(self):
@@ -447,6 +452,7 @@ class Bridge:
             return
         vp, v = f.vp, f.value
         log.debug('screen 0x%04X = %d', vp, v)
+        self.last_event = (vp, v)
         h = KEYS.get(vp)
         if h:
             return h(self, v)

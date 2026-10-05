@@ -8,8 +8,9 @@ same tables, so the indices here and in the icon library always agree.
 import re
 
 # Material badges, icon value = index. 0 = no badge (other materials: the
-# material name is put in front of the spool name instead).
-MATERIALS = ('', 'PLA', 'PETG', 'PLA-M', 'PLA-CF', 'PETG-CF')
+# material name is put in front of the spool name instead). Append only: the
+# icon ids in examples/spoolman follow this order.
+MATERIALS = ('', 'PLA', 'PETG', 'PLA-M', 'PLA-CF', 'PETG-CF', 'ABS', 'ASA', 'TPU', 'PA', 'PLA-W')
 
 # Swatches, icon value = index. 0 = empty ring (no active spool / no colour).
 COLOURS = (
@@ -57,12 +58,19 @@ def classify(material, name=''):
     n = (name or '').upper()
     cf = bool(_CF.search(m)) or bool(_CF.search(n))
     matte = 'MATTE' in m or 'MATTE' in n or m.endswith('-M')
+    wood = any(w in m or w in n for w in ('WOOD', 'BAMBOO')) or m.endswith('-W')
     if m.startswith('PETG'):
         return MATERIALS.index('PETG-CF' if cf else 'PETG'), 'PETG'
     if m.startswith('PLA'):
         if cf:
             return MATERIALS.index('PLA-CF'), 'PLA'
+        if wood:
+            return MATERIALS.index('PLA-W'), 'PLA'
         return MATERIALS.index('PLA-M' if matte else 'PLA'), 'PLA'
+    for prefix, badge in (('ABS', 'ABS'), ('ASA', 'ASA'), ('TPU', 'TPU'), ('TPE', 'TPU'), ('FLEX', 'TPU'),
+                          ('PA', 'PA'), ('NYLON', 'PA')):
+        if m.startswith(prefix):
+            return MATERIALS.index(badge), badge
     return 0, (material or '').strip()
 
 

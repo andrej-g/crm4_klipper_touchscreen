@@ -185,5 +185,19 @@ class _Inline:
         fn()
 
 
+
+class NotSupportedReturnTest(BridgeTest):
+    def test_ok_returns_to_origin_page(self):
+        cases = [((ui.K_ADV, 8), ui.PAGE_ADV), ((ui.K_ADV2, 6), ui.PAGE_ADV), ((ui.K_PREPARE, 7), ui.PAGE_TUNE2),
+                 ((ui.K_TUNE, 9), 14), ((ui.K_PID_NAV, 5), ui.PAGE_TUNE), ((ui.VP_MAX_SPEED[3], 50), 129)]
+        b = self.make()
+        for (vp, v), page in cases:
+            b.set_page(ui.PAGE_MAIN)                 # stale page the bridge last set itself
+            self.key(b, vp, v)
+            self.assertEqual(self.link.pages()[-1], ui.PAGE_NOT_SUPPORTED)
+            self.key(b, ui.K_PREPARE, 0xB)           # Ok
+            self.assertEqual(self.link.pages()[-1], page, (hex(vp), v))
+
+
 if __name__ == '__main__':
     unittest.main()

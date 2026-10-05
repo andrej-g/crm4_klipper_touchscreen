@@ -147,3 +147,28 @@ TXT_SPOOL_ROW_DETAIL = [(0x9280 + 16 * i, 28) for i in range(SPOOL_ROWS)]
 
 # fan speed in percent (examples/fan_speed)
 VP_FAN_PCT = 0x9070
+
+# Where the "not developed yet" popup's Ok returns to, by the event that opened it:
+# (vp, key) or (vp, None) for any value. The screen switches pages locally, so the
+# bridge can't know the current page; the page an event comes from is fixed by the UI.
+PAGE_TUNE, PAGE_TUNE2, PAGE_ADV = 21, 121, 132
+NOT_SUPPORTED_RETURN = {
+    (K_ADV, 4): PAGE_TUNE,                                   # Steps-per-mm tile (stock UI)
+    (K_ADV, 7): PAGE_ADV, (K_ADV, 8): PAGE_ADV, (K_ADV, 9): PAGE_ADV,
+    (K_ADV2, 1): PAGE_ADV, (K_ADV2, 2): PAGE_ADV,            # mesh points (133)
+    (K_ADV2, 3): PAGE_ADV, (K_ADV2, 4): PAGE_ADV, (K_ADV2, 5): PAGE_ADV,   # CR-Touch test (136)
+    (K_ADV2, 6): PAGE_ADV, (K_ADV2, 8): PAGE_ADV,
+    (0x410C, None): PAGE_ADV,                                # home offsets (140-142)
+    (K_PREPARE, 7): PAGE_TUNE2, (K_PREPARE, 9): PAGE_TUNE2,  # Feedback, WiFi
+    (K_RESET_CFG, None): PAGE_TUNE2, (K_RESTORE_NET, None): PAGE_TUNE2,
+    (K_TUNE, 9): 14,                                         # Auto Sleep
+    (K_PID_NAV, 5): PAGE_TUNE,                               # Manual Set PID tab
+    (VP_PID_NOZZLE_CYCLES, None): 122, (VP_PID_BED_CYCLES, None): 125,
+    (VP_MAX_ACCEL[2], None): 128, (VP_MAX_ACCEL[3], None): 128,
+    (VP_MAX_SPEED[2], None): 129, (VP_MAX_SPEED[3], None): 129,
+    (VP_MAX_CORNER[2], None): 130,
+}
+for _vp in VP_PID['extruder'] + VP_PID['heater_bed']:
+    NOT_SUPPORTED_RETURN[(_vp, None)] = PAGE_TUNE            # manual PID page (114)
+for _vp in VP_STEPS:
+    NOT_SUPPORTED_RETURN[(_vp, None)] = PAGE_TUNE            # steps page (131)

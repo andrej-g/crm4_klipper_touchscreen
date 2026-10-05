@@ -27,7 +27,18 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.badge('PETG'), 'PETG')
         self.assertEqual(self.badge('PETG-CF', 'Matte'), 'PETG-CF')
         self.assertEqual(self.badge('petg', 'Tough Grey CF'), 'PETG-CF')
-        self.assertEqual(spoolman.classify('ASA', 'Red'), (0, 'ASA'))
+        self.assertEqual(self.badge('ABS'), 'ABS')
+        self.assertEqual(self.badge('ABS+'), 'ABS')
+        self.assertEqual(self.badge('ASA', 'Red'), 'ASA')
+        self.assertEqual(self.badge('TPU 95A'), 'TPU')
+        self.assertEqual(self.badge('TPE'), 'TPU')
+        self.assertEqual(self.badge('PA12-CF'), 'PA')
+        self.assertEqual(self.badge('Nylon'), 'PA')
+        self.assertEqual(self.badge('PLA', 'AzureFilm BAMBOO sample'), 'PLA-W')
+        self.assertEqual(self.badge('PLA', 'Wood Walnut'), 'PLA-W')
+        self.assertEqual(self.badge('PLA-W'), 'PLA-W')
+        self.assertEqual(spoolman.classify('PC', 'Clear'), (0, 'PC'))
+        self.assertEqual(spoolman.classify('HIPS'), (0, 'HIPS'))
 
     def test_colours(self):
         name = lambda h: spoolman.COLOURS[spoolman.nearest_colour(h)][0]
@@ -48,10 +59,10 @@ class ClassifyTest(unittest.TestCase):
                          ('PETG', 'Hyper Speed BLACK', '227 g'))
         self.assertEqual(d['detail'], '227 g | 73 m | AzureFilm')
         d = spoolman.describe({'id': 7, 'remaining_weight': 5, 'filament': {
-            'name': 'Glitter Transparent Sample', 'material': 'ASA', 'multi_color_hexes': 'BF4140,FFFFFF'}},
+            'name': 'Glitter Transparent Sample', 'material': 'PC', 'multi_color_hexes': 'BF4140,FFFFFF'}},
             short_len=22)
         self.assertEqual(d['badge'], 0)
-        self.assertEqual(d['short'], 'ASA Glitter Transpar..')
+        self.assertEqual(d['short'], 'PC Glitter Transpare..')
         self.assertEqual(len(d['short']), 22)
         self.assertEqual(spoolman.COLOURS[d['swatch']][0], 'red')
         self.assertEqual(spoolman.describe(None)['name'], 'No active spool')
