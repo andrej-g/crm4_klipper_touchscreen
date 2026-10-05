@@ -138,12 +138,17 @@ class Bridge:
                 pass
             now = time.monotonic()
             if self._repaint.is_set() or now >= next_repaint:
+                reconnected = self._repaint.is_set()
                 self._repaint.clear()
                 with self.cache_lock:
                     self.cache.clear()
                 self.push_static()
-                if self.page is not None:
-                    self.set_page(self.page, 'repaint')
+                # Only force the page after a (re)connect. The screen switches pages
+                # by itself for most buttons, so the bridge's idea of the current
+                # page is often stale; re-sending it periodically would yank the
+                # user back to an older page.
+                if reconnected and self.page is not None:
+                    self.set_page(self.page, 'reconnect')
                 next_repaint = now + REPAINT_EVERY
                 next_poll = 0
             if now >= next_poll:
