@@ -34,7 +34,7 @@ class StockTest(unittest.TestCase):
             self.assertEqual(tree_digest(STOCK), tree_digest(tmp))
 
     def test_examples_build(self):
-        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding'):
+        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'klipper_ui'):
             with self.subTest(example=name):
                 prj = Project(STOCK)
                 apply(prj, load_spec(os.path.join(EXAMPLES, name, 'spec.yaml')), log=lambda *a: None)
@@ -56,6 +56,16 @@ class StockTest(unittest.TestCase):
         self.assertNotIn(0x87F0, colours)
         self.assertNotIn(0x87FF, colours)
         self.assertIn(0xFFFF, {r.color for r in prj.vars.pages[11] if r.vp == 0x3000})
+
+    def test_print_page_shortcuts(self):
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
+        kinds = {(r.kind, r.vp, r.page_next) for r in prj.touch.page(1)}
+        for vp in (0x7048, 0x704C, 0x704E):
+            self.assertIn(('data_input', vp, None), kinds)
+        self.assertIn(('return_key', 0x0000, 46), kinds)
+        self.assertEqual(prj.touch.find(page=46, vp=0x4004, key=8)[0].page_next, 1)
+        self.assertEqual(prj.touch.find(page=115, vp=0x4004, key=8)[0].page_next, 15)   # stock page untouched
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)

@@ -25,7 +25,7 @@ python -m crm4bridge --moonraker http://klipper.lan.gustin.si:7125
 
 In dry-run the bridge reads everything (temperatures, files, metadata, print state) but only **logs** commands (`DRY-RUN: SET_HEATER_TEMPERATURE …`). `--live` sends them. Use a config file for the rest (`crm4bridge.example.cfg`).
 
-The emulator can also run a built UI (`crm4ui build … --out build/x` → `python -m crm4ui.emulator build/x`; untouched files must be present, so build without `--changed-only`). Use this to preview custom pages, for example `examples/machine_page` together with `machine_page = true`.
+The emulator can also run a built UI (`crm4ui build <stock> examples/klipper_ui/spec.yaml build/klipper` → `python -m crm4ui.emulator build/x`; untouched files must be present, so build without `--changed-only`). Use this to preview custom pages, for example `examples/machine_page` together with `machine_page = true`.
 
 ## Logs for troubleshooting
 

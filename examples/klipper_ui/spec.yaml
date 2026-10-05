@@ -1,0 +1,5 @@
+# The complete UI for this printer: Klipper branding plus usability tweaks.
+#   crm4ui build <stock private/> examples/klipper_ui/spec.yaml build/klipper
+include:
+  - ../klipper_branding/spec.yaml
+  - ../print_page_shortcuts/spec.yaml
