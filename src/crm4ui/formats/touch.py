@@ -93,6 +93,15 @@ class TouchRecord:
     @key.setter
     def key(self, v): self.data[20:22] = struct.pack('>H', v)
 
+    @property
+    def keyboard_page(self):
+        return struct.unpack('>H', self.data[34:36])[0] if self.kind == 'data_input' else None
+    @keyboard_page.setter
+    def keyboard_page(self, v):
+        if self.kind != 'data_input':
+            raise ValueError('keyboard_page only exists on numeric input (FE00) records')
+        self.data[34:36] = struct.pack('>H', v)
+
     def describe(self) -> dict:
         d = {'flags': self.flags, 'page': self.page, 'area': self.area,
              'page_next': self.page_next, 'page_on': self.page_on, 'kind': self.kind}
@@ -107,7 +116,7 @@ class TouchRecord:
             d['op'] = 'inc' if x[20] else 'dec'
             d['step'], d['min'], d['max'] = struct.unpack('>HHH', x[22:28])
         elif self.kind == 'data_input':
-            d['keyboard_page'] = struct.unpack('>H', x[34:36])[0]
+            d['keyboard_page'] = self.keyboard_page
             d['min'], d['max'] = struct.unpack('>ii', x[50:58])
         elif self.kind == 'keyboard_key':
             d['ascii'] = bytes(x[14:16]).hex()

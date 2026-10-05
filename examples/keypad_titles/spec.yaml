@@ -1,0 +1,30 @@
+# Titled keypads for the nozzle and bed targets.
+#
+# Every numeric input on the stock UI opens the same keypad page (40), which has
+# no title, so you cannot tell which value you are typing. This spec copies the
+# keypad twice, writes a title into the empty strip above the input box, and
+# points every nozzle-target and bed-target input (Print, Tune, Preheat and
+# Feed pages) at its own copy. All other inputs keep using page 40.
+#
+#   page 47   keypad "Nozzle temperature"   (VP 0x7048)
+#   page 48   keypad "Hot bed temperature"  (VP 0x704C)
+#
+# Include it after print_page_shortcuts so the Print-page tiles are retargeted too.
+
+copy_pages:
+  - {from: 40, to: 47}
+  - {from: 40, to: 48}
+
+retouch:
+  - {target: page, page: 47, rect: [20, 30, 459, 84], fill: "#000000",
+     text: Nozzle temperature, size: 34, bold: 1, color: "#FFFFFF"}
+  - {target: page, page: 48, rect: [20, 30, 459, 84], fill: "#000000",
+     text: Hot bed temperature, size: 34, bold: 1, color: "#FFFFFF"}
+
+touch_edits:
+  - match: {vp: 0x7048, kind: data_input}
+    all: true
+    set: {keyboard_page: 47}
+  - match: {vp: 0x704C, kind: data_input}
+    all: true
+    set: {keyboard_page: 48}

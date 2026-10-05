@@ -127,6 +127,10 @@ def build_touch(page, d, project=None):
         r.page, r.area = page, area
         if 'page_next' in d:
             r.page_next = _opt_int(d['page_next'])
+        if 'keyboard_page' in d:
+            if r.kind != 'data_input':
+                raise SpecError('touch clone: keyboard_page needs a numeric input record')
+            r.keyboard_page = _int(d['keyboard_page'])
         return r
     flags = _int(d.get('flags', 0x0C))
     if typ == 'return_key':
@@ -144,6 +148,11 @@ def apply(project, spec, log=print):
         path = _path(spec, inc)
         log(f'include {inc}')
         apply(project, load_spec(path), log)
+
+    # copies first, so the rest of this spec (retouch, fields, touches) can edit them
+    for d in spec.get('copy_pages') or []:
+        copy_page(project, _int(d['from']), _int(d['to']))
+        log(f'page {d["from"]} copied to {d["to"]}')
 
     for k, p in (spec.get('images') or {}).items():
         page = _int(k)
@@ -189,10 +198,6 @@ def apply(project, spec, log=print):
         project.icons[lib_id].put(icon_id, _load_png(spec, d['png']))
         log(f'icon {lib_id}/{icon_id}: replaced from {d["png"]}')
 
-    for d in spec.get('copy_pages') or []:
-        copy_page(project, _int(d['from']), _int(d['to']))
-        log(f'page {d["from"]} copied to {d["to"]}')
-
     for d in spec.get('pages') or []:
         apply_page(project, spec, d, log)
 
@@ -200,18 +205,28 @@ def apply(project, spec, log=print):
         m = e.get('match') or {}
         hits = project.touch.find(page=_opt_int(m.get('page')), vp=_opt_int(m.get('vp')),
                                   key=_opt_int(m.get('key')))
-        if len(hits) != 1:
-            raise SpecError(f'touch_edits match {m} hit {len(hits)} records (need exactly 1)')
-        r, s = hits[0], e.get('set') or {}
-        if 'vp' in s:
-            r.vp = _int(s['vp'])
-        if 'key' in s:
-            r.key = _int(s['key'])
-        if 'page_next' in s:
-            r.page_next = _opt_int(s['page_next'])
-        if 'area' in s:
-            r.area = _check_area(s['area'], 'touch_edits')
-        log(f'touch edit {m} -> {s}')
+        if 'kind' in m:
+            hits = [r for r in hits if r.kind == m['kind']]
+        if e.get('all') and not hits:
+            raise SpecError(f'touch_edits match {m} hit no records')
+        if not e.get('all') and len(hits) != 1:
+            raise SpecError(f'touch_edits match {m} hit {len(hits)} records (need exactly 1, or all: true)')
+        s = e.get('set') or {}
+        for r in hits:
+            if 'vp' in s:
+                r.vp = _int(s['vp'])
+            if 'key' in s:
+                r.key = _int(s['key'])
+            if 'page_next' in s:
+                r.page_next = _opt_int(s['page_next'])
+            if 'area' in s:
+                r.area = _check_area(s['area'], 'touch_edits')
+            if 'keyboard_page' in s:
+                if r.kind != 'data_input':
+                    raise SpecError(f'touch_edits {m}: keyboard_page needs a numeric input, '
+                                    f'page {r.page} has a {r.kind}')
+                r.keyboard_page = _int(s['keyboard_page'])
+        log(f'touch edit {m} -> {s} ({len(hits)} record(s))')
 
     for d in spec.get('field_colors') or []:
         n = 0

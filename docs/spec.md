@@ -7,16 +7,17 @@ Coordinates are panel coordinates: 480×800 portrait, origin top-left, as you se
 Sections are applied in this order:
 
 0. `include`: other specs applied first, in order (paths relative to this spec)
-1. `images`
-2. `image_patches`
-3. `retouch`
-4. `remove_vars`
-5. `icons`
-6. `copy_pages`, then `pages`
-7. `touch_edits`
-8. `field_colors`
-9. `recolor`
-10. `vp_defaults`
+1. `copy_pages`, so the sections below can edit the copies
+2. `images`
+3. `image_patches`
+4. `retouch`
+5. `remove_vars`
+6. `icons`
+7. `pages`
+8. `touch_edits`
+9. `field_colors`
+10. `recolor`
+11. `vp_defaults`
 
 ## `images`: replace page backgrounds
 
@@ -78,7 +79,12 @@ copy_pages:
   - {from: 115, to: 46}     # background, touch areas and fields
 ```
 
-Typical use: a variant of a stock page whose back button goes somewhere else (combine with `touch_edits`).
+Typical uses:
+
+- a variant of a stock page whose back button goes somewhere else (combine with `touch_edits`);
+- a titled copy of the shared keypad (page 40) for one input (combine with `retouch` and `touch_edits` … `keyboard_page`; see `examples/keypad_titles`).
+
+The copy is taken from the page as it is after `include`, so it carries any branding applied there.
 
 ## `pages`: new pages, or rebuild (`replace: true`) or add to (`extend: true`) an existing one
 
@@ -96,18 +102,25 @@ pages:
       - {type: clone,  from_page: 1, vp: 0x7046, pos: [100, 400], new_vp: 0x9030}
 ```
 
-- `clone` copies an existing touch record (numeric input, increment, …) onto this page with a new area: `{type: clone, from_page: 14, vp: 0x7048, area: [14, 80, 234, 139]}`, optionally with `key` to disambiguate and `page_next` to override.
+- `clone` copies an existing touch record (numeric input, increment, …) onto this page with a new area: `{type: clone, from_page: 14, vp: 0x7048, area: [14, 80, 234, 139]}`, optionally with `key` to disambiguate, `page_next` to override, and `keyboard_page` to open a different keypad page.
 - `return_key` sends `5A A5 06 83 <vp> 01 <key>` to the host when released. `page_next` switches page locally as well.
 - `text` / `number` are cloned from a stock record of the same type (font, alignment), with the given fields replaced. Colours are RGB565.
 - Use VPs `0x9000–0x9FFF` for custom content. Neither the stock UI nor the Creality firmware uses them.
 
-## `touch_edits`: change one existing touch record
+## `touch_edits`: change existing touch records
 
 ```yaml
 touch_edits:
   - match: {page: 121, vp: 0x403E, key: 9}     # must match exactly one record
-    set: {page_next: 45}                       # any of: vp, key, page_next, area
+    set: {page_next: 45}                       # any of: vp, key, page_next, area, keyboard_page
+  - match: {vp: 0x7048, kind: data_input}      # every nozzle-target input, on any page
+    all: true
+    set: {keyboard_page: 47}
 ```
+
+- `match` takes any of `page`, `vp`, `key` and `kind` (`return_key`, `data_input`, `increment`, `keyboard_key`).
+- Without `all: true` the match must hit exactly one record; with it, at least one.
+- `keyboard_page` is the page a numeric input (`data_input`) opens as its keypad.
 
 ## `field_colors`: set number/text/curve colours
 

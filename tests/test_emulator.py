@@ -43,6 +43,25 @@ class EmulatorTest(unittest.TestCase):
         self.assertEqual(s.page, 14)
         self.assertEqual(self.sent[-1], dgus.reply_words(0x7048, 215))
 
+    def test_titled_keypad_page(self):
+        import os as _os
+        from crm4ui.emulator import ScreenSim
+        from crm4ui.spec import apply, load_spec
+        prj = Project(STOCK)
+        spec = _os.path.join(_os.path.dirname(__file__), '..', 'examples', 'keypad_titles', 'spec.yaml')
+        apply(prj, load_spec(spec), log=lambda *a: None)
+        s = ScreenSim(prj, start_page=14, lang=1)
+        sent = []
+        s.send = sent.append
+        s.touch(360, 150)                             # bed target -> titled keypad page 48
+        self.assertEqual(s.page, 48)
+        self.assertIsNotNone(s.keypad)
+        s.render()
+        for xy in ((295, 488), (182, 488), (410, 665)):   # 6 5 OK
+            s.touch(*xy)
+        self.assertEqual(s.page, 14)
+        self.assertEqual(sent[-1], dgus.reply_words(0x704C, 65))
+
     def test_increment(self):
         s = self.sim(110)
         s.touch(240, 200)                             # Z up

@@ -34,7 +34,7 @@ class StockTest(unittest.TestCase):
             self.assertEqual(tree_digest(STOCK), tree_digest(tmp))
 
     def test_examples_build(self):
-        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'klipper_ui'):
+        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'klipper_ui'):
             with self.subTest(example=name):
                 prj = Project(STOCK)
                 apply(prj, load_spec(os.path.join(EXAMPLES, name, 'spec.yaml')), log=lambda *a: None)
@@ -66,6 +66,25 @@ class StockTest(unittest.TestCase):
         self.assertIn(('return_key', 0x0000, 46), kinds)
         self.assertEqual(prj.touch.find(page=46, vp=0x4004, key=8)[0].page_next, 1)
         self.assertEqual(prj.touch.find(page=115, vp=0x4004, key=8)[0].page_next, 15)   # stock page untouched
+
+    def test_keypad_titles(self):
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
+        self.assertIn(47, prj.images)
+        self.assertIn(48, prj.images)
+        self.assertEqual(len([r for r in prj.touch.page(47) if r.kind == 'keyboard_key']),
+                         len([r for r in prj.touch.page(40) if r.kind == 'keyboard_key']))
+        target = {0x7048: 47, 0x704C: 48}
+        for r in prj.touch.records:
+            if r.kind == 'data_input':
+                self.assertEqual(r.keyboard_page, target.get(r.vp, 40), r.describe())
+        self.assertEqual({r.page for r in prj.touch.records if r.kind == 'data_input' and r.vp == 0x7048},
+                         {1, 14, 19, 91})
+        # the title strip changed, the keypad itself did not
+        a = prj.images[40].to_image(upright=True)
+        b = prj.images[47].to_image(upright=True)
+        self.assertNotEqual(a.crop((0, 0, 480, 100)).tobytes(), b.crop((0, 0, 480, 100)).tobytes())
+        self.assertEqual(a.crop((0, 100, 480, 800)).tobytes(), b.crop((0, 100, 480, 800)).tobytes())
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)

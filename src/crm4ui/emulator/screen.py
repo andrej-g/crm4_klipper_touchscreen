@@ -74,7 +74,7 @@ class ScreenSim:
     def set_page(self, page, why='touch'):
         with self.lock:
             self.page = page
-            self.keypad = None if page != 40 else self.keypad
+            self._keep_keypad()
             self._note('local', None, f'page {page} ({why})')
             self._bump()
 
@@ -131,17 +131,23 @@ class ScreenSim:
                 self._emit(dgus.reply_words(hit.vp, new), f'inc 0x{hit.vp:04X}={new}')
             elif kind == 'data_input':
                 self.keypad = {'vp': hit.vp, 'min': d['min'], 'max': d['max'], 'text': '',
-                               'return_page': self.page, 'dec': self._dec_digits(hit.vp)}
+                               'return_page': self.page, 'dec': self._dec_digits(hit.vp),
+                               'page': d['keyboard_page']}
                 self.page = d['keyboard_page']
                 self._note('local', None, f'keypad for 0x{hit.vp:04X}')
             elif kind == 'keyboard_key':
                 self._keypad_key(hit.code & 0xFF)
             if hit.page_next is not None and kind != 'data_input':
                 self.page = hit.page_next
-                self.keypad = None if self.page != 40 else self.keypad
+                self._keep_keypad()
                 self._note('local', None, f'page {self.page} (button)')
             self._bump()
             return d
+
+    def _keep_keypad(self):
+        # the keypad state only survives on its own keyboard page (40, or a titled copy)
+        if self.keypad and self.page != self.keypad['page']:
+            self.keypad = None
 
     def _dec_digits(self, vp):
         for p in (self.page,):
@@ -198,8 +204,8 @@ class ScreenSim:
             dr = ImageDraw.Draw(im)
             for r in self.project.vars.pages.get(page, []):
                 self._draw_var(im, dr, r)
-            if self.keypad and page == 40:
-                kp = self.keypad                                  # input box on page 40: 20,128..459,295
+            if self.keypad and page == self.keypad['page']:
+                kp = self.keypad                                  # input box (page 40 and copies): 20,128..459,295
                 dr.text((40, 175), kp['text'] or ' ', font=self._font(64), fill=(0, 0, 0))
                 lim = f"{kp['min'] / 10 ** kp['dec']:g} .. {kp['max'] / 10 ** kp['dec']:g}"
                 dr.text((40, 255), lim, font=self._font(22), fill=(120, 120, 120))
