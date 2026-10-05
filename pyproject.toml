@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crm4ui"
+version = "0.1.0"
+description = "Tooling to reuse the Creality CR-M4 stock touchscreen (DACAI, DGUS-II style UI) with Klipper"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["pillow>=9", "numpy>=1.20", "pyyaml>=5"]
+
+[project.scripts]
+crm4ui = "crm4ui.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
