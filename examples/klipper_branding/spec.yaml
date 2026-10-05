@@ -15,8 +15,9 @@
 
 # Colours: the logo's dark grey is rendered white on the splash, and the
 # logo's red (#B12F35) replaces the stock cyan accent everywhere (tabs, buttons,
-# toggles, progress bars, outlines, the boat) and the green status text
-# (file name / print info on the printing and preview pages).
+# toggles, progress bars, outlines, the boat). Status text that was green (file
+# name / print info on the printing and preview pages) and the cyan error text
+# on page 109 become white: red text on black is hard to read on the panel.
 
 images:
   0: splash.png            # make_splash.py renders klipper-logo.svg (grey -> white)
@@ -34,7 +35,8 @@ icons:
   - {lib: 18, id: 5, png: boat_dim.png}
 
 field_colors:
-  - {from: 0x87F0, color: "#B12F35"}       # green status text -> Klipper red
+  - {from: 0x87F0, color: "#FFFFFF"}       # green status text -> white
+  - {vp: 0x3168, color: "#FFFFFF"}         # error message (page 109) -> white
 
 recolor:
   rules:

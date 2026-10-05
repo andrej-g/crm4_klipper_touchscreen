@@ -55,6 +55,7 @@ class StockTest(unittest.TestCase):
         colours = {r.color for _, r in prj.vars.all() if r.color is not None}
         self.assertNotIn(0x87F0, colours)
         self.assertNotIn(0x87FF, colours)
+        self.assertIn(0xFFFF, {r.color for r in prj.vars.pages[11] if r.vp == 0x3000})
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)
