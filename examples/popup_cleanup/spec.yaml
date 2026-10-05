@@ -1,0 +1,17 @@
+# "This feature has not been developed yet" popup (page 108).
+#
+# The bridge shows it for Creality-only features. Remove the Creality mascot and
+# its thought bubble, and label the button "Ok" instead of "Yes".
+#
+# The mascot sits across the card's top edge, so the area is rebuilt from a clean
+# column of the same card. The "Yes" label is a per-language icon shared with
+# other dialogs (pages 26 and 118), so it is removed from this page only and "Ok"
+# is drawn into the background (the UI is English only).
+
+retouch:
+  - {target: page, page: 108, rect: [125, 175, 325, 316], fill: {copy_column: 400}}   # mascot
+  - {target: page, page: 108, rect: [70, 466, 414, 520], fill: "#B52C31",
+     text: Ok, size: 28, color: "#FFFFFF"}
+
+remove_vars:
+  - {page: 108, vp: 0x5247, pos: [176, 458]}       # "Yes" label

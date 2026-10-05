@@ -44,7 +44,7 @@ retouch:
 ```
 
 - `rect` is inclusive: upright panel coordinates for pages, icon pixels for icons.
-- `fill` is a colour, `auto` (median of the surrounding pixels) or `interpolate` (blends the four edges, which keeps shading gradients).
+- `fill` is a colour, `auto` (median of the surrounding pixels), `interpolate` (blends the four edges, which keeps shading gradients) or `{copy_column: X}` (each row takes the pixel at column X of the same row, which rebuilds horizontal edges such as a card's top border).
 - `font` defaults to `stock`, the input package's `truefont/font.ttf`, so labels match the UI. A path to any TTF also works.
 - `size` is in pixels, `spacing` is extra pixels between letters, `bold` is the stroke width, and `dy` nudges the text vertically.
 

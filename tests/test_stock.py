@@ -34,7 +34,7 @@ class StockTest(unittest.TestCase):
             self.assertEqual(tree_digest(STOCK), tree_digest(tmp))
 
     def test_examples_build(self):
-        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'english_only', 'input_limits', 'klipper_ui'):
+        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'english_only', 'input_limits', 'popup_cleanup', 'klipper_ui'):
             with self.subTest(example=name):
                 prj = Project(STOCK)
                 apply(prj, load_spec(os.path.join(EXAMPLES, name, 'spec.yaml')), log=lambda *a: None)
@@ -102,6 +102,17 @@ class StockTest(unittest.TestCase):
             self.assertEqual(prj.touch.find(page=page, vp=0x7048)[0].limits, (100, 300))
         self.assertEqual(prj.touch.find(page=19, vp=0x7048)[0].limits, (0, 300))
         self.assertEqual(prj.touch.find(page=122, vp=0x7070)[0].limits, (185, 300))   # PID untouched
+
+    def test_popup_cleanup(self):
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
+        self.assertEqual([r for r in prj.vars.pages[108] if list(r.pos) == [176, 458]], [])
+        self.assertEqual(sum(1 for r in prj.vars.pages[26] if r.vp == 0x5247 and list(r.pos) != [0, 0]) > 0, True)
+        im = prj.images[108].to_image(upright=True).convert('RGB')
+        card = im.getpixel((400, 250))
+        self.assertTrue(all(im.getpixel((x, 250)) == card for x in range(125, 326)))   # mascot gone
+        self.assertEqual(im.getpixel((200, 200)), (0, 0, 0))                           # above the card
+        self.assertEqual(len(prj.touch.page(108)), 1)                                   # button kept
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)

@@ -6,3 +6,4 @@ include:
   - ../keypad_titles/spec.yaml
   - ../english_only/spec.yaml
   - ../input_limits/spec.yaml
+  - ../popup_cleanup/spec.yaml

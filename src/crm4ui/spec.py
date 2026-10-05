@@ -348,6 +348,14 @@ def retouch_image(img, project, spec, d):
     dr = ImageDraw.Draw(img)
     if fill == 'interpolate':
         _interpolate_rows(img, rect)
+    elif isinstance(fill, dict) and 'copy_column' in fill:
+        # every row takes the colour of a clean reference column at the same height,
+        # which rebuilds horizontal edges and bands (e.g. a card's top border)
+        cx = _int(fill['copy_column'])
+        if not 0 <= cx < img.size[0]:
+            raise SpecError(f'retouch copy_column {cx} outside the image')
+        for y in range(rect[1], rect[3] + 1):
+            dr.line([(rect[0], y), (rect[2], y)], fill=img.getpixel((cx, y)))
     else:
         dr.rectangle(rect, fill=_border_color(img, rect) if fill == 'auto' else fill)
     text = d.get('text')
