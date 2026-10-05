@@ -15,7 +15,7 @@ from crm4ui import dgus
 from . import spoolman, ui
 from .config import State
 from .link import ScreenLink
-from .moonraker import Moonraker, MoonrakerError
+from .moonraker import Moonraker, MoonrakerError, tasmota_delayed_off
 
 log = logging.getLogger('crm4bridge')
 
@@ -569,6 +569,36 @@ class Bridge:
             self._api('FIRMWARE_RESTART', self.moon.firmware_restart)
         elif k == 3:
             self._api('RESTART', self.moon.restart)
+        elif k in (4, 5):
+            if self.print_state in ('printing', 'paused'):
+                self.text(ui.TXT_MACHINE_MSG, 'Stop the print first')
+                self.set_page(ui.PAGE_MACHINE, 'host action refused while printing')
+                return
+            if k == 4:
+                self.set_page(ui.PAGE_HOST_REBOOT, 'host reboot')
+                self._api('host reboot', self.moon.machine_reboot)
+            else:
+                self.host_shutdown()
+
+    def host_shutdown(self):
+        """Shut the host down; with shutdown_plug set, the printer plug switches off by itself
+        shutdown_plug_delay seconds later (the Pi has halted by then)."""
+        cfg = self.cfg
+        if cfg.shutdown_plug:
+            note = f'Printer power switches off in {cfg.shutdown_plug_delay:.0f} s'
+        else:
+            note = 'Safe to switch off in 30 s'
+        self.text(ui.TXT_SHUTDOWN_NOTE, note)
+        self.set_page(ui.PAGE_HOST_SHUTDOWN, 'host shutdown')
+
+        def run():
+            if cfg.shutdown_plug:
+                tasmota_delayed_off(cfg.shutdown_plug, cfg.shutdown_plug_delay, cfg.shutdown_plug_output,
+                                    cfg.shutdown_plug_user, cfg.shutdown_plug_password)
+            self.moon.machine_shutdown()
+        label = 'host shutdown' + (f' (plug {cfg.shutdown_plug} off in {cfg.shutdown_plug_delay:.0f} s)'
+                                   if cfg.shutdown_plug else '')
+        self._api(label, run)
 
     def k_ignore(self, k):
         pass

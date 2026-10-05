@@ -1,36 +1,84 @@
-# Adds a custom "Machine" page (id 45) reached from the Tune 2/2 page (121),
-# replacing the stock WiFi tile. The bridge on the Pi owns the custom VPs:
+# Custom "Machine" page (id 45), reached from the Tune 2/2 page (121) where it
+# replaces the stock WiFi tile.
 #
-#   0x9000  return key   1 = EMERGENCY STOP (M112), 2 = FIRMWARE_RESTART, 3 = RESTART
+#   Klipper   Restart (RESTART)          Firmware restart (FIRMWARE_RESTART)
+#   Host      Reboot                     Shutdown
+#   EMERGENCY STOP (immediate)
+#   status: Klipper state, last message
+#
+# Every action except E-STOP asks first, on a copy of the stock Yes/No dialog
+# (111): pages 49 Restart, 50 Firmware restart, 51 Reboot, 52 Shutdown.
+# Pages 53 / 54 are shown while the host shuts down / reboots (copies of the
+# stock "please wait" page 32); line 2 of page 53 is written by the bridge
+# (when the printer plug will switch off).
+#
+# VPs (0x9000-0x9FFF is unused by the stock UI and the Creality firmware):
+#   0x9000  return key   1 E-STOP, 2 firmware restart, 3 restart, 4 reboot, 5 shutdown, 0 "No"
 #   0x9010  text, 40 B   Klipper state line
 #   0x9040  text, 40 B   last message / error
-#
-# Custom VPs live in 0x9000-0x9FFF, which neither the stock UI nor the
-# Creality firmware uses.
+#   0x9050  text, 40 B   shutdown page, line 2
+
+copy_pages:
+  - {from: 111, to: 49}
+  - {from: 111, to: 50}
+  - {from: 111, to: 51}
+  - {from: 111, to: 52}
+  - {from: 32, to: 53}
+  - {from: 32, to: 54}
 
 image_patches:
   - page: 121              # WiFi tile -> "Machine" (tile spans 245,31..472,164)
     png: machine_tile.png
     pos: [255, 38]
 
-remove_vars:
-  - {page: 121, vp: 0x4220}   # the WiFi on/off switch icon on that tile
+retouch:
+  - {target: page, page: 49, rect: [40, 330, 440, 380], fill: {copy_column: 400}, text: "Restart Klipper?", size: 28}
+  - {target: page, page: 50, rect: [40, 330, 440, 380], fill: {copy_column: 400}, text: "Restart the MCU firmware?", size: 28}
+  - {target: page, page: 51, rect: [40, 330, 440, 380], fill: {copy_column: 400}, text: "Reboot the host?", size: 28}
+  - {target: page, page: 52, rect: [40, 330, 440, 380], fill: {copy_column: 400}, text: "Shut down the host?", size: 28}
+  - {target: page, page: 53, rect: [40, 340, 440, 380], fill: {copy_column: 400}, text: "Shutting down the host...", size: 28}
+  - {target: page, page: 54, rect: [40, 340, 440, 380], fill: {copy_column: 400}, text: "Rebooting the host...", size: 28}
+  - {target: page, page: 54, rect: [40, 392, 440, 430], fill: {copy_column: 400}, text: "The screen comes back when it is up.", size: 22, color: "#A0A0A0"}
 
-touch_edits:
-  - match: {page: 121, vp: 0x403E, key: 0x0009}   # stock WiFi toggle
-    set: {page_next: 45}                          # now just opens page 45
+remove_vars:
+  - {page: 121, vp: 0x4220}                     # the WiFi on/off switch icon on that tile
+  - {page: 49, vp: 0x5247, pos: [46, 298]}      # stock question text (icon)
+  - {page: 50, vp: 0x5247, pos: [46, 298]}
+  - {page: 51, vp: 0x5247, pos: [46, 298]}
+  - {page: 52, vp: 0x5247, pos: [46, 298]}
+  - {page: 53, vp: 0x5247, pos: [46, 345]}      # "Auto back home, please wait..."
+  - {page: 54, vp: 0x5247, pos: [46, 345]}
 
 pages:
   - id: 45
     background: page45.png
     touch:
       - {type: page_jump, area: [0, 0, 200, 80], page: 121}            # back
-      - {type: return_key, area: [12, 100, 468, 220], vp: 0x9000, key: 1}
-      - {type: return_key, area: [12, 236, 468, 336], vp: 0x9000, key: 2}
-      - {type: return_key, area: [12, 352, 468, 452], vp: 0x9000, key: 3}
+      - {type: page_jump, area: [12, 116, 236, 206], page: 49}          # Restart
+      - {type: page_jump, area: [244, 116, 468, 206], page: 50}         # Firmware restart
+      - {type: page_jump, area: [12, 260, 236, 350], page: 51}          # Reboot
+      - {type: page_jump, area: [244, 260, 468, 350], page: 52}         # Shutdown
+      - {type: return_key, area: [12, 378, 468, 468], vp: 0x9000, key: 1}   # E-STOP
     vars:
-      - {type: text, vp: 0x9010, box: [28, 530, 460, 575], color: 0xFFFF, length: 40}
-      - {type: text, vp: 0x9040, box: [28, 628, 460, 690], color: 0xFFFF, length: 40}
+      - {type: text, vp: 0x9010, box: [28, 544, 460, 588], color: 0xFFFF, length: 40}
+      - {type: text, vp: 0x9040, box: [28, 636, 460, 690], color: 0xFFFF, length: 40}
+  - id: 53
+    extend: true
+    vars:
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9050, box: [60, 392, 440, 420], length: 40, font: [10, 20], color: "#A0A0A0"}
+
+touch_edits:
+  - match: {page: 121, vp: 0x403E, key: 0x0009}   # stock WiFi toggle
+    set: {page_next: 45}                          # now just opens page 45
+  # Yes -> the action (the bridge takes over); No -> back to the Machine page
+  - {match: {page: 49, vp: 0x400B, key: 0xF1}, set: {vp: 0x9000, key: 3, page_next: 45}}
+  - {match: {page: 50, vp: 0x400B, key: 0xF1}, set: {vp: 0x9000, key: 2, page_next: 45}}
+  - {match: {page: 51, vp: 0x400B, key: 0xF1}, set: {vp: 0x9000, key: 4}}
+  - {match: {page: 52, vp: 0x400B, key: 0xF1}, set: {vp: 0x9000, key: 5}}
+  - {match: {page: 49, vp: 0x400B, key: 0xF0}, set: {vp: 0x9000, key: 0, page_next: 45}}
+  - {match: {page: 50, vp: 0x400B, key: 0xF0}, set: {vp: 0x9000, key: 0, page_next: 45}}
+  - {match: {page: 51, vp: 0x400B, key: 0xF0}, set: {vp: 0x9000, key: 0, page_next: 45}}
+  - {match: {page: 52, vp: 0x400B, key: 0xF0}, set: {vp: 0x9000, key: 0, page_next: 45}}
 
 vp_defaults:
   - {vp: 0x9010, text: "waiting for host", bytes: 40}

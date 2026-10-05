@@ -144,9 +144,15 @@ class StockTest(unittest.TestCase):
         apply(prj, load_spec(os.path.join(EXAMPLES, 'machine_page', 'spec.yaml')), log=lambda *a: None)
         self.assertIn(45, prj.images)
         keys = sorted(r.key for r in prj.touch.page(45) if r.vp == 0x9000)
-        self.assertEqual(keys, [1, 2, 3])
+        self.assertEqual(keys, [1])                     # E-STOP; the rest go through Yes/No pages
         self.assertEqual(prj.vpmem.get_text(0x9010, 40), 'waiting for host')
         self.assertEqual(prj.touch.find(page=121, vp=0x403E, key=9)[0].page_next, 45)
+        for page, key, nxt in ((49, 3, 45), (50, 2, 45), (51, 4, None), (52, 5, None)):
+            yes = prj.touch.find(page=page, vp=0x9000, key=key)
+            self.assertEqual([r.page_next for r in yes], [nxt])
+            self.assertEqual(prj.touch.find(page=page, vp=0x9000, key=0)[0].page_next, 45)
+        self.assertEqual({r.page_next for r in prj.touch.page(45) if r.kind != 'return_key' or r.vp == 0}, {121, 49, 50, 51, 52})
+        self.assertIn(0x9050, {r.vp for r in prj.vars.pages[53]})
 
 
 if __name__ == '__main__':

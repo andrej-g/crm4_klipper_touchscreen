@@ -42,6 +42,7 @@ PAGE_SETTINGS_2 = 121
 PAGE_PID_NOZZLE, PAGE_PID_NOZZLE_RUN, PAGE_PID_NOZZLE_DONE = 122, 123, 124
 PAGE_PID_BED, PAGE_PID_BED_RUN, PAGE_PID_BED_DONE = 125, 126, 127
 PAGE_MACHINE = 45                  # custom page from examples/machine_page
+PAGE_HOST_SHUTDOWN, PAGE_HOST_REBOOT = 53, 54
 
 PRINT_FLOW_PAGES = {PAGE_PAUSE_CONFIRM, PAGE_STOP_CONFIRM, PAGE_PRINT_DONE, PAGE_PRINTING_NOPAUSE,
                     PAGE_PRINTING, PAGE_PAUSED, PAGE_TUNE, PAGE_ZOFFSET_TUNE, PAGE_RUNOUT}
@@ -99,6 +100,7 @@ TXT_ABOUT = {'model': (0x30FA, 20), 'hw': (0x3104, 20), 'fw': (0x310E, 20), 'siz
 # custom machine page (examples/machine_page)
 TXT_MACHINE_STATE = (0x9010, 40)
 TXT_MACHINE_MSG = (0x9040, 40)
+TXT_SHUTDOWN_NOTE = (0x9050, 40)
 
 # ---- key VPs (screen -> host) -------------------------------------------------------
 K_MAIN = 0x4002        # 1 file, 2 finish(done page), 3 prepare, 4 settings, 5 print tab, 6 language ok
@@ -121,7 +123,7 @@ K_ADV2 = 0x4105        # 1/2 mesh points, 3..5 CR-touch, 6 volume, 8 home offset
 K_PID_NAV = 0x401F
 K_PID = 0x410F         # 1 start nozzle, 3 start bed, 2/4 yes (save), 5/6 back
 K_LANGUAGE = 0x4248    # 0..8
-K_MACHINE = 0x9000     # custom page: 1 e-stop, 2 firmware restart, 3 restart
+K_MACHINE = 0x9000     # custom page: 1 e-stop, 2 firmware restart, 3 restart, 4 host reboot, 5 host shutdown, 0 no
 
 LANG_KEY_TO_INDEX = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}
 

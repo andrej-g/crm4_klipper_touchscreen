@@ -13,8 +13,8 @@
 #   PID pages  "Manual Set PID" tab (-> 114, every field unsupported)
 #
 # Temp PID on Tune 1/2 opens the nozzle auto-PID page (122) instead of the
-# manual one (114). Handled in the bridge only (no local page switch): WiFi,
-# Auto Sleep, Volume, Improved accuracy, Auto leveling data, PID cycle counts,
+# manual one (114). Handled in the bridge only (no local page switch): WiFi
+# (when the UI has no Machine page), Auto Sleep, Volume, Improved accuracy, Auto leveling data, PID cycle counts,
 # accelerations / speeds for Z and E.
 
 touch_edits:

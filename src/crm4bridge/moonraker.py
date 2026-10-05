@@ -112,3 +112,34 @@ class Moonraker:
 
     def restart(self):
         return self.post('/printer/restart')
+
+    def machine_reboot(self):
+        return self.post('/machine/reboot')
+
+    def machine_shutdown(self):
+        return self.post('/machine/shutdown')
+
+
+def tasmota_delayed_off(address, delay_s, output=1, user=None, password=None, timeout=5.0):
+    """Ask a Tasmota plug to switch itself off after delay_s seconds (max 360).
+
+    The plug runs the delay itself, so it still switches off after this host
+    has shut down. Uses Tasmota's HTTP command API: Backlog Delay <0.1 s>; Power<n> Off.
+    """
+    delay = max(2, min(3600, int(round(delay_s * 10))))
+    base = address if '://' in address else f'http://{address}'
+    params = {'cmnd': f'Backlog Delay {delay}; Power{int(output)} Off'}
+    if user:
+        params['user'] = user
+    if password:
+        params['password'] = password
+    url = base.rstrip('/') + '/cm?' + urllib.parse.urlencode(params)
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            body = json.loads(r.read() or b'{}')
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise MoonrakerError(f'plug {address}: {e}') from e
+    if isinstance(body, dict) and ('Command' in body and body['Command'] == 'Unknown'
+                                   or 'WARNING' in body):
+        raise MoonrakerError(f'plug {address}: {body}')
+    return body

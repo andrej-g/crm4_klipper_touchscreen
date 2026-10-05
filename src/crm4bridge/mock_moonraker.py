@@ -63,6 +63,7 @@ class Printer:
         self.busy_until = 0
         self.spools = [list(s) for s in SPOOLS]
         self.spool_id = 3
+        self.host_actions = []
         self.spoolman_connected = True
 
     def tick(self, dt):
@@ -242,6 +243,10 @@ def make_handler(pr: Printer):
                 return self._ok({'spool_id': pr.spool_id})
             if p == '/server/spoolman/proxy':
                 return self._spoolman_proxy(q)
+            if p in ('/machine/reboot', '/machine/shutdown'):
+                print(f'mock: host {p.rsplit("/", 1)[1]} requested (ignored)')
+                pr.host_actions.append(p.rsplit('/', 1)[1])
+                return self._ok('ok')
             if pr.klippy != 'ready' and p not in ('/printer/firmware_restart', '/printer/restart'):
                 return self._ok('Klippy not ready', 503)
             if p == '/printer/gcode/script':

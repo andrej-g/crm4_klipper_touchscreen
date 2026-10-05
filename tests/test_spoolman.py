@@ -136,5 +136,88 @@ class BridgeSpoolmanTest(unittest.TestCase):
         self.assertEqual(len(self.link.sent), n)
 
 
+
+class HostControlTest(BridgeSpoolmanTest):
+    """Machine page host actions against the mock Moonraker and a fake Tasmota plug."""
+
+    def setUp(self):
+        super().setUp()
+        from http.server import BaseHTTPRequestHandler
+        self.plug_calls = []
+        calls = self.plug_calls
+
+        class Plug(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def do_GET(self):
+                calls.append(self.path)
+                body = b'{"Delay":600,"POWER1":"OFF"}'
+                self.send_response(200)
+                self.send_header('Content-Length', str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+        self.plug = ThreadingHTTPServer(('127.0.0.1', 0), Plug)
+        threading.Thread(target=self.plug.serve_forever, daemon=True).start()
+        self.b.jobs = _Inline()
+
+    def tearDown(self):
+        self.plug.shutdown()
+        self.plug.server_close()
+        super().tearDown()
+
+    def pages(self):
+        from crm4ui import dgus
+        return [f.payload()[3] for f in self.link.sent if f.vp == dgus.VP_PAGE]
+
+    def test_reboot(self):
+        self.b.handle_frame(_key(ui.K_MACHINE, 4))
+        self.assertEqual(self.pages()[-1], ui.PAGE_HOST_REBOOT)
+        self.assertEqual(self.pr.host_actions, ['reboot'])
+
+    def test_shutdown_with_plug(self):
+        self.b.cfg.shutdown_plug = f'127.0.0.1:{self.plug.server_address[1]}'
+        self.b.cfg.shutdown_plug_user, self.b.cfg.shutdown_plug_password = 'admin', 'pw'
+        self.b.handle_frame(_key(ui.K_MACHINE, 5))
+        self.assertEqual(self.pages()[-1], ui.PAGE_HOST_SHUTDOWN)
+        self.assertEqual(self.pr.host_actions, ['shutdown'])
+        self.assertEqual(len(self.plug_calls), 1)
+        from urllib.parse import parse_qs, urlparse
+        q = parse_qs(urlparse(self.plug_calls[0]).query)
+        self.assertEqual(q['cmnd'], ['Backlog Delay 600; Power1 Off'])
+        self.assertEqual((q['user'], q['password']), (['admin'], ['pw']))
+        self.assertIn('off in 60 s', self.screen()[1][ui.TXT_SHUTDOWN_NOTE[0]])
+
+    def test_plug_unreachable_aborts_shutdown(self):
+        self.b.cfg.shutdown_plug = '127.0.0.1:9'
+        self.b.handle_frame(_key(ui.K_MACHINE, 5))
+        self.assertEqual(self.pr.host_actions, [])
+        self.assertEqual(self.pages()[-1], ui.PAGE_ERROR)
+
+    def test_refused_while_printing(self):
+        self.b.print_state = 'printing'
+        for k in (4, 5):
+            self.b.handle_frame(_key(ui.K_MACHINE, k))
+        self.assertEqual(self.pr.host_actions, [])
+        self.assertEqual(self.pages()[-1], ui.PAGE_MACHINE)
+        self.assertEqual(self.screen()[1][ui.TXT_MACHINE_MSG[0]], 'Stop the print first')
+
+    def test_dry_run(self):
+        self.b.cfg.dry_run = True
+        self.b.cfg.shutdown_plug = f'127.0.0.1:{self.plug.server_address[1]}'
+        self.b.handle_frame(_key(ui.K_MACHINE, 5))
+        self.assertEqual((self.pr.host_actions, self.plug_calls), ([], []))
+
+
+class _Inline:
+    def submit(self, fn):
+        fn()
+
+
+def _key(vp, k):
+    from crm4ui import dgus
+    return dgus.reply_words(vp, k)
+
+
 if __name__ == '__main__':
     unittest.main()

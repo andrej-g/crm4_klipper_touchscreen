@@ -20,7 +20,12 @@ DEFAULTS = {
     'move_feedrate': '6000',
     'z_feedrate': '600',
     'extrude_feedrate': '300',
-    'machine_page': 'false',
+    'machine_page': 'true',
+    'shutdown_plug': '',
+    'shutdown_plug_user': '',
+    'shutdown_plug_password': '',
+    'shutdown_plug_output': '1',
+    'shutdown_plug_delay': '60',
     'spoolman': 'true',
     'spoolman_interval': '10',
 }
@@ -57,6 +62,11 @@ class Config:
         self.z_feedrate = b.getint('z_feedrate')
         self.extrude_feedrate = b.getint('extrude_feedrate')
         self.machine_page = b.getboolean('machine_page')
+        self.shutdown_plug = b['shutdown_plug'].strip()
+        self.shutdown_plug_user = b['shutdown_plug_user'] or None
+        self.shutdown_plug_password = b['shutdown_plug_password'] or None
+        self.shutdown_plug_output = b.getint('shutdown_plug_output')
+        self.shutdown_plug_delay = b.getfloat('shutdown_plug_delay')
         self.spoolman = b.getboolean('spoolman')
         self.spoolman_interval = b.getfloat('spoolman_interval')
         self.presets = dict(DEFAULT_PRESETS)
