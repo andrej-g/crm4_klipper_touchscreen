@@ -96,7 +96,10 @@ touch_edits:
 field_colors:
   - {vp: 0x7048, color: 0xFFE0}            # every page
   - {page: 1, vp: 0x704C, color: 0xFFE0}   # one page
+  - {from: 0x87F0, color: "#B12F35"}       # every field currently in that colour
 ```
+
+Colours are RGB565 integers or `"#rrggbb"`.
 
 ## `recolor`: hue remap across images, icons and field colours
 
@@ -109,6 +112,8 @@ recolor:
   fields: true
   skip_icon_libs: []
 ```
+
+Instead of `hue_to` and the scales, a rule can map one reference colour exactly: `{hue_from: [165, 215], from_color: "#42BED6", to_color: "#B12F35"}`. Pixels at the reference colour become exactly `to_color`, and other pixels in the range keep their relative saturation and brightness (anti-aliasing, dimmed variants).
 
 Only pixels inside the hue range and above `min_saturation` change. Greys, black (the icon transparency key) and white are never affected.
 

@@ -37,6 +37,14 @@ def _int(v):
     return int(v)
 
 
+def _color565(v):
+    """RGB565 int from 0xRRRR (int / '0x..') or '#rrggbb'."""
+    if isinstance(v, str) and v.startswith('#'):
+        r, g, b = (int(v[i:i + 2], 16) for i in (1, 3, 5))
+        return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
+    return _int(v)
+
+
 def _opt_int(v):
     return None if v is None else _int(v)
 
@@ -187,15 +195,18 @@ def apply(project, spec, log=print):
 
     for d in spec.get('field_colors') or []:
         n = 0
+        color = _color565(d['color'])
         for p, r in project.vars.all():
             if 'page' in d and p != _int(d['page']):
                 continue
-            if r.vp == _int(d['vp']) and r.color is not None:
-                r.color = _int(d['color'])
+            if r.color is None:
+                continue
+            if ('vp' in d and r.vp == _int(d['vp'])) or ('from' in d and r.color == _color565(d['from'])):
+                r.color = color
                 n += 1
         if not n:
             raise SpecError(f'field_colors {d}: no matching record')
-        log(f'field colour VP {d["vp"]}: {n} record(s)')
+        log(f'field colour {d.get("vp", d.get("from"))}: {n} record(s)')
 
     rc = spec.get('recolor')
     if rc:

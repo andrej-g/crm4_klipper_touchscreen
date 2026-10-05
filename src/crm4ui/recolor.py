@@ -22,12 +22,26 @@ class HueRule:
 
     @classmethod
     def from_spec(cls, d):
+        if 'to_color' in d:
+            # map the reference colour from_color exactly onto to_color; other
+            # pixels in the hue range keep their relative saturation/brightness
+            fh, fs, fv = _hex_hsv(d['from_color'])
+            th, ts, tv = _hex_hsv(d['to_color'])
+            return cls(d['hue_from'], th, d.get('min_saturation', 0.2),
+                       ts / max(fs, 1e-6), tv / max(fv, 1e-6))
         return cls(d['hue_from'], d['hue_to'], d.get('min_saturation', 0.2),
                    d.get('saturation_scale', 1.0), d.get('value_scale', 1.0))
 
     def mask(self, h, s):
         inside = (h >= self.h0) & (h <= self.h1) if self.h0 <= self.h1 else (h >= self.h0) | (h <= self.h1)
         return inside & (s >= self.min_s)
+
+
+def _hex_hsv(c):
+    c = c.lstrip('#')
+    rgb = np.array([[[int(c[i:i + 2], 16) for i in (0, 2, 4)]]], np.uint8)
+    h, s, v = _rgb_to_hsv(rgb)
+    return float(h[0, 0]), float(s[0, 0]), float(v[0, 0])
 
 
 def _rgb_to_hsv(a):
