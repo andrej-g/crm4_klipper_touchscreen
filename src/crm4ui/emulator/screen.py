@@ -6,6 +6,7 @@ the current page. The behaviour follows DWIN DGUS-II conventions; details
 the real DACAI screen may do differently are marked ASSUMPTION.
 """
 import collections
+import io
 import os
 import struct
 import threading
@@ -35,6 +36,7 @@ class ScreenSim:
         self._bg = {}
         self._fonts = {}
         self.font_path = font_path or os.path.join(project.root, 'truefont', 'font.ttf')
+        self._font_bytes = None
         if lang is not None:
             self.set_word(0x5247, lang)
 
@@ -186,7 +188,13 @@ class ScreenSim:
     def _font(self, px):
         if px not in self._fonts:
             try:
-                self._fonts[px] = ImageFont.truetype(self.font_path, px)
+                # load from memory: FreeType maps a font opened by path, and on Windows a
+                # mapped file can't be overwritten, which broke `crm4ui build --force`
+                # into the folder the emulator was showing
+                if self._font_bytes is None:
+                    with open(self.font_path, 'rb') as fh:
+                        self._font_bytes = fh.read()
+                self._fonts[px] = ImageFont.truetype(io.BytesIO(self._font_bytes), px)
             except OSError:
                 self._fonts[px] = ImageFont.load_default(px)
         return self._fonts[px]

@@ -1,7 +1,6 @@
 """A whole screen project (the ``private/`` directory of a Creality screen package)."""
 import hashlib
 import os
-import shutil
 
 from .formats import IconLib, TouchConfig, VarConfig, VpMemory, ZBmp
 
@@ -65,9 +64,8 @@ class Project:
                     continue
                 if changed_only:
                     continue
-                dst = os.path.join(out_dir, rel)
-                os.makedirs(os.path.dirname(dst), exist_ok=True)
-                shutil.copyfile(os.path.join(dirpath, f), dst)
+                with open(os.path.join(dirpath, f), 'rb') as fh:
+                    _write(os.path.join(out_dir, rel), fh.read())
                 written.append(rel)
         for rel, data in gen.items():
             src = os.path.join(self.root, rel)
@@ -75,12 +73,31 @@ class Project:
                 with open(src, 'rb') as fh:
                     if fh.read() == data:
                         continue
-            dst = os.path.join(out_dir, rel)
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            with open(dst, 'wb') as fh:
-                fh.write(data)
+            _write(os.path.join(out_dir, rel), data)
             written.append(rel)
         return sorted(written)
+
+
+def _write(dst, data):
+    """Write a file unless it already holds exactly ``data``.
+
+    Skipping identical files keeps rebuilds into a folder that is in use (e.g. by
+    the emulator) from touching files that did not change."""
+    try:
+        if os.path.getsize(dst) == len(data):
+            with open(dst, 'rb') as fh:
+                if fh.read() == data:
+                    return
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    try:
+        with open(dst, 'wb') as fh:
+            fh.write(data)
+    except OSError as e:
+        raise OSError(e.errno, f'cannot write {dst}: {e.strerror}. Is it open in another program, '
+                               f'for example an emulator running on this folder? Stop it and '
+                               f'build again.') from e
 
 
 def tree_digest(root):

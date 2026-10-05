@@ -3,6 +3,7 @@
 See ``docs/spec.md`` for the full reference. Paths in a spec are relative to the
 spec file. Integers may be written as ``0x9010`` (YAML) or ``"0x9010"`` (JSON).
 """
+import io
 import json
 import os
 
@@ -276,7 +277,8 @@ def _font(project, spec, name, size):
     else:
         path = _path(spec, name)
     try:
-        return ImageFont.truetype(path, size)
+        with open(path, 'rb') as fh:        # from memory, so the file isn't left mapped
+            return ImageFont.truetype(io.BytesIO(fh.read()), size)
     except OSError as e:
         raise SpecError(f'font {path}: {e}')
 
