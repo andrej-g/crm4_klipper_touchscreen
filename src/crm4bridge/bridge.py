@@ -169,8 +169,8 @@ class Bridge:
         self.word(ui.VP_PID_BED_TEMP, self.state.get('pid_bed', 60))
         self.word(ui.VP_PID_NOZZLE_CYCLES, 5)
         self.word(ui.VP_PID_BED_CYCLES, 5)
-        self.word(ui.VP_TOGGLE_SLEEP, ui.TOGGLE_ON if self.state.get('sleep', True) else ui.TOGGLE_OFF)
-        self.word(ui.VP_TOGGLE_VOLUME, ui.TOGGLE_ON if self.state.get('volume', True) else ui.TOGGLE_OFF)
+        self.word(ui.VP_TOGGLE_SLEEP, ui.TOGGLE_OFF)        # not supported: shown off
+        self.word(ui.VP_TOGGLE_VOLUME, ui.TOGGLE_OFF)
         self._push_language_ticks()
         self.text(ui.TXT_ABOUT['model'], self.cfg.model_name)
         self.text(ui.TXT_ABOUT['size'], self.cfg.print_size)
@@ -372,10 +372,8 @@ class Bridge:
         elif k == 7 and self.sensor_obj:
             on = s.get(self.sensor_obj, {}).get('enabled', True)
             self._gcode(f'SET_FILAMENT_SENSOR SENSOR={self.cfg.filament_sensor} ENABLE={0 if on else 1}')
-        elif k == 9:
-            on = not self.state.get('sleep', True)
-            self.state.set('sleep', on)
-            self.word(ui.VP_TOGGLE_SLEEP, ui.TOGGLE_ON if on else ui.TOGGLE_OFF)
+        elif k == 9:                       # Auto Sleep: the screen backlight isn't driven
+            self._not_supported()
 
     def k_stop(self, k):
         if k == 0xF1:
@@ -426,6 +424,8 @@ class Bridge:
         elif k == 6:
             self._gcode('M84', 'motors off')
         elif k == 9 and not self.cfg_machine_page():
+            self._not_supported()
+        elif k == 7:                       # Feedback (Creality QR code)
             self._not_supported()
         elif k == 0xA:
             self.set_page(ui.PAGE_MAIN, 'usb popup')
@@ -485,16 +485,14 @@ class Bridge:
             self.show_preview(self.files[i])
 
     def k_adv(self, k):
-        if k in (7, 8, 9):                 # 9: CR-Touch testing
+        if k in (4, 7, 8, 9):              # 4 steps-per-mm, 9 CR-Touch testing
             self._not_supported()
 
     def k_adv2(self, k):
         if k in (1, 2, 3, 4, 5):
             self._not_supported()
-        elif k == 6:
-            on = not self.state.get('volume', True)
-            self.state.set('volume', on)
-            self.word(ui.VP_TOGGLE_VOLUME, ui.TOGGLE_ON if on else ui.TOGGLE_OFF)
+        elif k in (6, 8):                  # 6 volume (no buzzer), 8 set home offsets
+            self._not_supported()
 
     def k_pid(self, k):
         if k in (1, 3):
@@ -528,6 +526,10 @@ class Bridge:
 
     def k_ignore(self, k):
         pass
+
+    def k_pid_nav(self, k):
+        if k == 5:                         # "Manual Set PID" tab
+            self._not_supported()
 
     def k_not_supported(self, k):
         self._not_supported()
@@ -641,7 +643,7 @@ KEYS = {
     ui.K_PREHEAT: Bridge.k_preheat, ui.K_PREPARE: Bridge.k_prepare, ui.K_BACK: Bridge.k_back,
     ui.K_LEVEL: Bridge.k_level, ui.K_HOME: Bridge.k_home, ui.K_EXTRUDE: Bridge.k_extrude,
     ui.K_FILES: Bridge.k_files, ui.K_FILE_ROW: Bridge.k_file_row, ui.K_ADV: Bridge.k_adv,
-    ui.K_ADV2: Bridge.k_adv2, ui.K_PID: Bridge.k_pid, ui.K_PID_NAV: Bridge.k_ignore,
+    ui.K_ADV2: Bridge.k_adv2, ui.K_PID: Bridge.k_pid, ui.K_PID_NAV: Bridge.k_pid_nav,
     ui.K_LANGUAGE: Bridge.k_language, ui.K_MACHINE: Bridge.k_machine,
     0x410C: Bridge.k_not_supported,        # set home offsets
     0x405F: Bridge.k_resume_power_loss,    # "resume previous print?"
@@ -660,5 +662,6 @@ for _vn, _vb in ui.PRESETS.values():
     VALUES[_vn] = VALUES[_vb] = Bridge.v_preset
 for _vp in ui.VP_MAX_ACCEL + ui.VP_MAX_SPEED + ui.VP_MAX_CORNER:
     VALUES[_vp] = Bridge.v_velocity
-for _vp in ui.VP_PID['extruder'] + ui.VP_PID['heater_bed'] + ui.VP_STEPS + (0x7078, 0x707A):
+for _vp in (ui.VP_PID['extruder'] + ui.VP_PID['heater_bed'] + ui.VP_STEPS + (0x7078, 0x707A)
+            + (ui.VP_PID_NOZZLE_CYCLES, ui.VP_PID_BED_CYCLES)):     # PID_CALIBRATE has no cycle count
     VALUES[_vp] = Bridge.v_not_supported

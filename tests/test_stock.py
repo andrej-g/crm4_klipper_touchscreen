@@ -117,8 +117,10 @@ class StockTest(unittest.TestCase):
         im = prj.images[109].to_image(upright=True).convert('RGB')
         self.assertEqual(im.getpixel((200, 250)), (0, 0, 0))                           # mascot / old card top
         self.assertEqual(prj.vars.pages[109][0].box, [118, 413, 440, 441])
-        for page, vp, key in ((121, 0x400B, 0), (121, 0x4009, 0), (132, 0x4104, 9)):
+        for page, vp, key in ((121, 0x400B, 0), (121, 0x4009, 0), (121, 0x403E, 7), (21, 0x4104, 4),
+                              (132, 0x4104, 9), (132, 0x4105, 8), (122, 0x401F, 5), (125, 0x401F, 5)):
             self.assertIsNone(prj.touch.find(page=page, vp=vp, key=key)[0].page_next)
+        self.assertEqual(prj.touch.find(page=21, vp=0x403E, key=8)[0].page_next, 122)
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)

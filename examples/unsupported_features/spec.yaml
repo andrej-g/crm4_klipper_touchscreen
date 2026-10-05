@@ -1,14 +1,37 @@
 # Creality-only features go straight to the "not developed yet" popup.
 #
 # These tiles used to open a page locally before the host could react: a
-# confirm dialog (Reset configuration -> 111, Restore network -> 112) or the
-# CR-Touch test page (136). Their page switch is removed, so the tap only
-# reaches the bridge, which shows page 108. The return keys stay the same.
+# confirm dialog, a Creality page, or a page where nothing works under Klipper.
+# Their page switch is removed, so the tap only reaches the bridge, which shows
+# page 108. The return keys stay the same, so a stock UI behaves the same once
+# the bridge answers.
+#
+#   Tune 2/2   Reset configuration (-> 111), Restore network (-> 112),
+#              Feedback (-> 143, Creality QR code)
+#   Tune 1/2   Steps-per-mm (-> 131, every field unsupported)
+#   ADV.SET    CR-Touch testing (-> 136), Set home offsets (-> 140)
+#   PID pages  "Manual Set PID" tab (-> 114, every field unsupported)
+#
+# Temp PID on Tune 1/2 opens the nozzle auto-PID page (122) instead of the
+# manual one (114). Handled in the bridge only (no local page switch): WiFi,
+# Auto Sleep, Volume, Improved accuracy, Auto leveling data, PID cycle counts,
+# accelerations / speeds for Z and E.
 
 touch_edits:
-  - match: {page: 121, vp: 0x400B, key: 0}     # Tune 2/2: Reset configuration
+  - match: {page: 121, vp: 0x400B, key: 0}     # Reset configuration
     set: {page_next: null}
-  - match: {page: 121, vp: 0x4009, key: 0}     # Tune 2/2: Restore network
+  - match: {page: 121, vp: 0x4009, key: 0}     # Restore network
     set: {page_next: null}
-  - match: {page: 132, vp: 0x4104, key: 9}     # ADV.SET: CR-Touch testing
+  - match: {page: 121, vp: 0x403E, key: 7}     # Feedback
     set: {page_next: null}
+  - match: {page: 21, vp: 0x4104, key: 4}      # Steps-per-mm
+    set: {page_next: null}
+  - match: {page: 132, vp: 0x4104, key: 9}     # CR-Touch testing
+    set: {page_next: null}
+  - match: {page: 132, vp: 0x4105, key: 8}     # Set home offsets
+    set: {page_next: null}
+  - match: {vp: 0x401F, key: 5}                # "Manual Set PID" tab on the auto-PID pages
+    all: true
+    set: {page_next: null}
+  - match: {page: 21, vp: 0x403E, key: 8}      # Temp PID -> nozzle auto PID
+    set: {page_next: 122}

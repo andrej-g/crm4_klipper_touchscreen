@@ -59,11 +59,11 @@ The emulator log has every touch (with coordinates), every page change and every
   - **Filament:** feed / retract with lengths remembered between sessions; when the nozzle is too cold, the "temperature insufficient" popup.
   - **Tune:** Z-offset babystepping (`SET_GCODE_OFFSET`), the runout sensor toggle, the `per_print_mesh` toggle, fan on/off.
   - **Bed mesh:** `mesh_gcode` from the auto-leveling page.
-  - **PID:** autotune for nozzle and bed (`PID_CALIBRATE`, then `SAVE_CONFIG` on Yes).
+  - **PID:** autotune for nozzle and bed (`PID_CALIBRATE`, then `SAVE_CONFIG` on Yes). The Temp PID tile opens the nozzle autotune page.
   - **Velocity limits:** X/Y max acceleration, speed and corner velocity (`SET_VELOCITY_LIMIT`).
   - **Language:** fixed by `language` in the config (English by default). Picks on the screen's language page are ignored and undone.
   - **Machine page (custom):** E-STOP, `FIRMWARE_RESTART`, `RESTART`.
-  - **Everything else** (Creality Wi-Fi/cloud, restore network, reset configuration, CR-Touch tests, power-loss recovery, home offsets, manual PID, steps/mm) shows the "not developed yet" popup.
+  - **Everything else** shows the "not developed yet" popup: Creality Wi-Fi/cloud, restore network, reset configuration, feedback, CR-Touch tests, improved accuracy, auto leveling data, power-loss recovery, home offsets, manual PID and PID cycle counts, steps/mm, Z/E velocity limits, auto sleep and volume. With the `klipper_ui` build these tiles no longer open their own pages first (`examples/unsupported_features`).
 
 ## Assumptions to confirm on the real screen
 

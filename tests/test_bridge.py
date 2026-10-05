@@ -159,7 +159,9 @@ class BridgeTest(unittest.TestCase):
 
     def test_creality_only_tiles(self):
         b = self.make()
-        for vp, k in ((ui.K_RESET_CFG, 0), (ui.K_RESTORE_NET, 0), (ui.K_ADV, 9)):
+        for vp, k in ((ui.K_RESET_CFG, 0), (ui.K_RESTORE_NET, 0), (ui.K_ADV, 9), (ui.K_ADV, 4),
+                      (ui.K_ADV2, 6), (ui.K_ADV2, 8), (ui.K_PREPARE, 7), (ui.K_TUNE, 9),
+                      (ui.K_PID_NAV, 5), (ui.VP_PID_NOZZLE_CYCLES, 5)):
             self.link.sent.clear()
             self.key(b, vp, k)
             self.assertEqual(self.link.pages(), [ui.PAGE_NOT_SUPPORTED])
