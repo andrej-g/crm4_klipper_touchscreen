@@ -117,7 +117,7 @@ class StockTest(unittest.TestCase):
         im = prj.images[109].to_image(upright=True).convert('RGB')
         self.assertEqual(im.getpixel((200, 250)), (0, 0, 0))                           # mascot / old card top
         self.assertEqual(prj.vars.pages[109][0].box, [118, 413, 440, 441])
-        for page, vp, key in ((121, 0x400B, 0), (121, 0x4009, 0), (121, 0x403E, 7), (21, 0x4104, 4),
+        for page, vp, key in ((121, 0x400B, 0), (121, 0x4009, 0), (121, 0x403E, 7),
                               (132, 0x4104, 9), (132, 0x4105, 8), (122, 0x401F, 5), (125, 0x401F, 5)):
             self.assertIsNone(prj.touch.find(page=page, vp=vp, key=key)[0].page_next)
         self.assertEqual(prj.touch.find(page=21, vp=0x403E, key=8)[0].page_next, 122)
@@ -154,6 +154,17 @@ class StockTest(unittest.TestCase):
             self.assertEqual(len(prj.touch.find(page=page, vp=0x9060, key=0x20)), 1)
         self.assertNotIn(0x40D3, {r.vp for r in prj.touch.page(56)})
         self.assertEqual(len([r for r in prj.vars.pages[56] if 0x9200 <= r.vp < 0x9300]), 24)
+
+    def test_firmware_restart_tile(self):
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
+        tile = prj.touch.find(page=21, vp=0x9000, key=0)
+        self.assertEqual([r.page_next for r in tile], [57])
+        self.assertEqual(prj.touch.find(page=21, vp=0x4104, key=4), [])
+        self.assertEqual(prj.touch.find(page=57, vp=0x9000, key=2)[0].page_next, 21)
+        self.assertEqual(prj.touch.find(page=57, vp=0x9000, key=0)[0].page_next, 21)
+        self.assertEqual(prj.touch.find(page=50, vp=0x9000, key=2)[0].page_next, 45)   # Machine page unchanged
+        self.assertEqual([r for r in prj.vars.pages[21] if list(r.pos) == [16, 397]], [])
 
     def test_machine_page_contents(self):
         prj = Project(STOCK)

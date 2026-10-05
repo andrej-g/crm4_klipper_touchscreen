@@ -1,0 +1,25 @@
+# Firmware restart shortcut on the Tune page 1/2 (21), in place of the unused
+# Steps-per-mm tile.
+#
+# The tile is the Reset Configuration tile of page 121 (restart arrow, chevron)
+# with a "Firmware restart" label. It opens page 57, a copy of the Machine page's
+# Firmware restart dialog (50) whose Yes / No return to the Tune page.
+# Include after machine_page (page 50 must exist).
+
+copy_pages:
+  - {from: 50, to: 57}
+
+retouch:
+  - {target: page, page: 21, rect: [8, 334, 235, 466], fill: {copy_from: [8, 31], page: 121}}
+  - {target: page, page: 21, rect: [16, 398, 134, 425], fill: {copy_column: 120},
+     text: Firmware, size: 27, color: "#FFFFFF"}
+  - {target: page, page: 21, rect: [16, 429, 97, 456], fill: {copy_column: 120},
+     text: restart, size: 27, color: "#FFFFFF"}
+
+remove_vars:
+  - {page: 21, vp: 0x5247, pos: [16, 397]}          # "Steps-per-mm" label
+
+touch_edits:
+  - {match: {page: 21, vp: 0x4104, key: 4}, set: {vp: 0x9000, key: 0, page_next: 57}}   # tile -> dialog
+  - {match: {page: 57, vp: 0x9000, key: 2}, set: {page_next: 21}}                       # Yes
+  - {match: {page: 57, vp: 0x9000, key: 0}, set: {page_next: 21}}                       # No
