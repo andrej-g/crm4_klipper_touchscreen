@@ -26,6 +26,7 @@ DEFAULTS = {
     'shutdown_plug_password': '',
     'shutdown_plug_output': '1',
     'shutdown_plug_delay': '60',
+    'thumbnails': 'true',
     'spoolman': 'true',
     'spoolman_interval': '10',
 }
@@ -67,6 +68,7 @@ class Config:
         self.shutdown_plug_password = b['shutdown_plug_password'] or None
         self.shutdown_plug_output = b.getint('shutdown_plug_output')
         self.shutdown_plug_delay = b.getfloat('shutdown_plug_delay')
+        self.thumbnails = b.getboolean('thumbnails')
         self.spoolman = b.getboolean('spoolman')
         self.spoolman_interval = b.getfloat('spoolman_interval')
         self.presets = dict(DEFAULT_PRESETS)

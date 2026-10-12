@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from crm4ui import dgus
 
-from . import spoolman, ui
+from . import spoolman, thumbnail, ui
 from .config import State
 from .link import ScreenLink
 from .moonraker import Moonraker, MoonrakerError, tasmota_delayed_off
@@ -58,6 +58,11 @@ class Bridge:
         self.spool_page = 0
         self.spool_return = ui.PAGE_MAIN
         self.jobs = ThreadPoolExecutor(1, thread_name_prefix='klipper-action')
+        self.thumbs = ThreadPoolExecutor(1, thread_name_prefix='thumbnail')
+        self.thumb_gen = 0               # bumped per request; a newer request aborts an older upload
+        self.thumb_file = None           # file whose picture is in the screen's 0xC000 buffer
+        self.thumb_ok = False            # ... and whether it had a thumbnail at all
+        self.thumb_want = None
         self.stop = threading.Event()
         self._repaint = threading.Event()
         macro, _, var = cfg.autolevel_variable.partition(':')
@@ -88,11 +93,71 @@ class Bridge:
             self.page_before_popup = page
         self.page = page
         log.debug('page %s %s', page, why)
+        self._sync_mascot(page)
         self._send(dgus.set_page(page))
+
+    # ---- thumbnail picture (VP 0xC000) -----------------------------------------------
+    def _thumb_target(self, page):
+        if page in ui.THUMB_PREVIEW_PAGES:
+            return (self.selected or {}).get('path')
+        if page in ui.THUMB_PRINT_PAGES:
+            return self.print_file or None
+        return None
+
+    def _sync_mascot(self, page):
+        """Hide the Benchy where the file's picture is shown; request the picture if needed."""
+        want = self._thumb_target(page)
+        if want and self.cfg.thumbnails and want != self.thumb_file and want != self.thumb_want:
+            self.request_thumbnail(want)
+        shown = bool(want) and want == self.thumb_file and self.thumb_ok
+        self.word(ui.VP_MASCOT, ui.MASCOT_HIDDEN if shown else ui.MASCOT_SHOWN)
+
+    def request_thumbnail(self, path, meta=None):
+        if not self.cfg.thumbnails or not path:
+            return
+        self.thumb_gen += 1
+        gen, self.thumb_want = self.thumb_gen, path
+        self.thumbs.submit(self._upload_thumbnail, gen, path, meta)
+
+    def _upload_thumbnail(self, gen, path, meta):
+        try:
+            jpeg = None
+            if meta is None:
+                meta = self.moon.metadata(path)
+            rel = thumbnail.pick(meta)
+            if rel:
+                folder = os.path.dirname(path)
+                jpeg = thumbnail.to_jpeg(self.moon.file_bytes(
+                    'gcodes/' + (f'{folder}/{rel}' if folder else rel)))
+        except (MoonrakerError, OSError, ValueError) as e:
+            log.warning('thumbnail for %s: %s', path, e)
+            jpeg = None
+        except Exception as e:                     # bad image data etc. must not kill the worker
+            log.warning('thumbnail for %s failed: %s', path, e)
+            jpeg = None
+        if gen != self.thumb_gen:
+            return
+        if jpeg is None:
+            self.thumb_file, self.thumb_ok, self.thumb_want = path, False, None
+            self._sync_mascot(self.page)
+            return
+        clear, chunks, header = thumbnail.frames(jpeg)
+        self._send(clear)
+        for f in chunks:
+            if gen != self.thumb_gen:
+                return                             # a newer picture was requested
+            time.sleep(thumbnail.GAP_S)
+            self._send(f)
+        self._send(header)
+        log.info('thumbnail for %s: %d bytes in %d frames', path, len(jpeg), len(chunks))
+        if gen == self.thumb_gen:
+            self.thumb_file, self.thumb_ok, self.thumb_want = path, True, None
+            self._sync_mascot(self.page)
 
     def _on_screen_connect(self):
         with self.cache_lock:
             self.cache.clear()
+        self.thumb_file, self.thumb_ok, self.thumb_want = None, False, None   # picture buffer lost
         self.next_spool_poll = 0.0
         self._repaint.set()
 
@@ -169,7 +234,7 @@ class Bridge:
     # ======================================================================== state -> screen
     def push_static(self):
         self.word(ui.VP_LANGUAGE, self.cfg.language)
-        self.word(ui.VP_MASCOT, 4)
+        self._sync_mascot(self.page)                     # Benchy, or hidden behind a thumbnail
         for name, (vn, vb) in ui.PRESETS.items():
             n, b = self._preset(name)
             self.word(vn, n)
@@ -181,12 +246,19 @@ class Bridge:
         self.word(ui.VP_PID_NOZZLE_CYCLES, 5)
         self.word(ui.VP_PID_BED_CYCLES, 5)
         self.word(ui.VP_TOGGLE_SLEEP, ui.TOGGLE_OFF)        # not supported: shown off
-        self.word(ui.VP_TOGGLE_VOLUME, ui.TOGGLE_OFF)
+        self.word(ui.VP_TOGGLE_WIFI, ui.TOGGLE_OFF)
+        self._push_volume()
         self._push_language_ticks()
         self.text(ui.TXT_ABOUT['model'], self.cfg.model_name)
         self.text(ui.TXT_ABOUT['size'], self.cfg.print_size)
         self.text(ui.TXT_ABOUT['web'], self.cfg.mainsail_url.replace('http://', '').replace('https://', ''))
         self.text(ui.TXT_ABOUT['hw'], 'Klipper host')
+
+    def _push_volume(self):
+        on = self.state.get('volume', True)
+        self.word(ui.VP_TOGGLE_VOLUME, ui.TOGGLE_ON if on else ui.TOGGLE_OFF)
+        cfg = ui.SYS_CONFIG_BEEP_ON if on else ui.SYS_CONFIG_BEEP_OFF
+        self._write(ui.VP_SYS_CONFIG, bytes([0x5A, 0x00, 0x00, cfg]))
 
     def _push_language_ticks(self):
         lang = self.cfg.language
@@ -378,12 +450,11 @@ class Bridge:
         self.word(ui.VP_POS_Y, round(pos[1] * 10))
         self.word(ui.VP_POS_Z, round(pos[2] * 10))
         th = s.get('toolhead', {})
-        for vp in ui.VP_MAX_ACCEL[:2]:
-            self.word(vp, round(th.get('max_accel', 0)))
-        for vp in ui.VP_MAX_SPEED[:2]:
-            self.word(vp, round(th.get('max_velocity', 0)))
-        for vp in ui.VP_MAX_CORNER[:2]:
-            self.word(vp, round(th.get('square_corner_velocity', 0)))
+        # screen fields have one decimal: value x10 (16-bit, so at most 6553.5)
+        for vps, key in ((ui.VP_MAX_ACCEL, 'max_accel'), (ui.VP_MAX_SPEED, 'max_velocity'),
+                         (ui.VP_MAX_CORNER, 'square_corner_velocity')):
+            for vp in vps[:2]:
+                self.word(vp, min(0xFFFF, max(0, round(th.get(key, 0) * 10))))
         self.word(ui.VP_TOGGLE_FAN, ui.TOGGLE_ON if s.get('fan', {}).get('speed', 0) > 0 else ui.TOGGLE_OFF)
         self.word(ui.VP_FAN_PCT, round(s.get('fan', {}).get('speed', 0) * 100))
         if self.sensor_obj and self.sensor_obj in s:
@@ -404,9 +475,11 @@ class Bridge:
             self.est_time = None
             if fn:
                 try:
-                    self.est_time = self.moon.metadata(fn).get('estimated_time')
+                    meta = self.moon.metadata(fn)
+                    self.est_time = meta.get('estimated_time')
+                    self.request_thumbnail(fn, meta)
                 except MoonrakerError:
-                    pass
+                    self.request_thumbnail(fn)
         self.text(ui.TXT_FILENAME, os.path.splitext(os.path.basename(fn))[0])
         pct = int(progress * 100)
         self.word(ui.VP_PROGRESS_BAR, pct)
@@ -458,7 +531,7 @@ class Bridge:
             return h(self, v)
         h = VALUES.get(vp)
         if h:
-            return h(self, vp, dgus.to_signed(v))
+            return h(self, vp, f.signed_value)
         log.info('unhandled screen event 0x%04X = 0x%04X', vp, v)
 
     # ---- keys -------------------------------------------------------------------
@@ -566,7 +639,7 @@ class Bridge:
                         then=lambda ok: self.set_page(ui.PAGE_AUTOLEVEL, 'leveling done'))
 
     def k_home(self, k):
-        axes = {3: 'X', 4: 'Y', 5: 'Z', 6: ''}
+        axes = {3: 'X', 4: 'Y', 5: '', 6: 'X Y'}             # stock V2.0.3: 5 = all, 6 = X+Y
         if k in axes:
             back = self.page if self.page in ui.PAGE_MOVE else ui.PAGE_MOVE[0]
             self.set_page(ui.PAGE_HOMING, 'homing')
@@ -611,7 +684,11 @@ class Bridge:
     def k_adv2(self, k):
         if k in (1, 2, 3, 4, 5):
             self._not_supported()
-        elif k in (6, 8):                  # 6 volume (no buzzer), 8 set home offsets
+        elif k == 6:                       # volume = the screen's touch beep (VP 0x0080)
+            on = not self.state.get('volume', True)
+            self.state.set('volume', on)
+            self._push_volume()
+        elif k == 8:                       # set home offsets
             self._not_supported()
 
     def k_pid(self, k):
@@ -625,9 +702,11 @@ class Bridge:
                         then=lambda ok: self.set_page(done if ok else ui.PAGE_ERROR, 'pid done'))
         elif k in (2, 4):
             self._gcode('SAVE_CONFIG', 'SAVE_CONFIG (Klipper restarts)')
-            self.set_page(ui.PAGE_SETTINGS, 'pid saved')
+            self.set_page(ui.PAGE_PID_NOZZLE if k == 2 else ui.PAGE_PID_BED, 'pid saved')
         elif k in (5, 6):
-            self.set_page(ui.PAGE_SETTINGS, 'pid discarded')
+            # stock returns to the manual PID page (114); that page is unsupported here,
+            # so back to the autotune page of the same heater
+            self.set_page(ui.PAGE_PID_NOZZLE if k == 5 else ui.PAGE_PID_BED, 'pid discarded')
 
     def k_language(self, k):
         # The language is fixed by the config (English by default); the klipper_ui build
@@ -740,12 +819,14 @@ class Bridge:
                 self.word(vp, v)
 
     def v_velocity(self, vp, v):
+        v = v / 10                                      # one decimal on the screen
+        txt = f'{v:g}'
         if vp in ui.VP_MAX_ACCEL[:2]:
-            self._gcode(f'SET_VELOCITY_LIMIT ACCEL={v}')
+            self._gcode(f'SET_VELOCITY_LIMIT ACCEL={txt}')
         elif vp in ui.VP_MAX_SPEED[:2]:
-            self._gcode(f'SET_VELOCITY_LIMIT VELOCITY={v}')
+            self._gcode(f'SET_VELOCITY_LIMIT VELOCITY={txt}')
         elif vp in ui.VP_MAX_CORNER[:2]:
-            self._gcode(f'SET_VELOCITY_LIMIT SQUARE_CORNER_VELOCITY={v}')
+            self._gcode(f'SET_VELOCITY_LIMIT SQUARE_CORNER_VELOCITY={txt}')
         else:
             self._not_supported()
 
@@ -787,6 +868,8 @@ class Bridge:
         self.text(ui.TXT_EST_TIME, _dur(est) if est else '-')
         self.text(ui.TXT_FILAMENT, f'{fil / 1000:.2f} m' if fil else '-')
         self.text(ui.TXT_LAYERS, str(layers) if layers else '-')
+        if f['path'] != self.thumb_file:
+            self.request_thumbnail(f['path'], meta)
         self.set_page(ui.PAGE_FILE_PREVIEW, 'preview')
 
 
@@ -827,6 +910,6 @@ for _vn, _vb in ui.PRESETS.values():
     VALUES[_vn] = VALUES[_vb] = Bridge.v_preset
 for _vp in ui.VP_MAX_ACCEL + ui.VP_MAX_SPEED + ui.VP_MAX_CORNER:
     VALUES[_vp] = Bridge.v_velocity
-for _vp in (ui.VP_PID['extruder'] + ui.VP_PID['heater_bed'] + ui.VP_STEPS + (0x7078, 0x707A)
+for _vp in (ui.VP_PID['extruder'] + ui.VP_PID['heater_bed'] + ui.VP_STEPS + (0x7078, 0x707A, ui.VP_HOME_OFFSET_Z)
             + (ui.VP_PID_NOZZLE_CYCLES, ui.VP_PID_BED_CYCLES)):     # PID_CALIBRATE has no cycle count
     VALUES[_vp] = Bridge.v_not_supported

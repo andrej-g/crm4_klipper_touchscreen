@@ -1,8 +1,8 @@
 """DWIN DGUS-II style serial protocol, as used between the CR-M4 mainboard and
 its DACAI screen.
 
-Frame: ``5A A5 LEN CMD DATA...`` where LEN counts CMD + DATA (no CRC; the
-stock ``config.txt`` does not enable one; still unconfirmed on hardware).
+Frame: ``5A A5 LEN CMD DATA...`` where LEN counts CMD + DATA. No CRC: the stock
+mainboard firmware never sends one and the screen's ``config.txt`` (``R2=6C``) has it off.
 
 Host -> screen
   ``82 VPhi VPlo data...``      write VP memory (words, big-endian)
@@ -53,8 +53,19 @@ class Frame:
 
     @property
     def value(self):
+        """Event value: one word, or two words combined (32-bit VPs such as the PID and
+        steps fields send ``83 VP 02 hi lo``)."""
         w = self.words()
-        return w[0] if w else None
+        if not w:
+            return None
+        return (w[0] << 16) | w[1] if len(w) == 2 else w[0]
+
+    @property
+    def signed_value(self):
+        v = self.value
+        if v is None:
+            return None
+        return to_signed32(v) if len(self.words()) == 2 else to_signed(v)
 
     def payload(self):
         """For 0x82 frames: bytes written after the VP."""
@@ -103,6 +114,15 @@ ACK = Frame(CMD_WRITE, b'OK')
 
 def to_signed(v: int) -> int:
     return v - 0x10000 if v & 0x8000 else v
+
+
+def to_signed32(v: int) -> int:
+    return v - 0x100000000 if v & 0x80000000 else v
+
+
+def write_dwords(vp: int, *values: int) -> Frame:
+    """32-bit VP values (two words each, high word first)."""
+    return write_bytes(vp, b''.join(struct.pack('>I', v & 0xFFFFFFFF) for v in values))
 
 
 # ---- stream parser --------------------------------------------------------------

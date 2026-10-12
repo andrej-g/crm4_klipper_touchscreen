@@ -60,6 +60,18 @@ class Moonraker:
     def metadata(self, filename):
         return self.get('/server/files/metadata', {'filename': filename})
 
+    def file_bytes(self, root_path):
+        """Raw file from Moonraker's file manager, e.g. ``gcodes/.thumbs/x-300x300.png``."""
+        url = self.url + '/server/files/' + urllib.parse.quote(root_path)
+        req = urllib.request.Request(url)
+        if self.api_key:
+            req.add_header('X-Api-Key', self.api_key)
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                return r.read()
+        except (urllib.error.URLError, OSError) as e:
+            raise MoonrakerError(f'{root_path}: {e}') from e
+
     def history_totals(self):
         return self.get('/server/history/totals')
 

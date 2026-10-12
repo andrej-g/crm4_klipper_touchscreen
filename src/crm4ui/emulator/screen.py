@@ -37,8 +37,24 @@ class ScreenSim:
         self._fonts = {}
         self.font_path = font_path or os.path.join(project.root, 'truefont', 'font.ttf')
         self._font_bytes = None
+        self._pictures = {}
         if lang is not None:
             self.set_word(0x5247, lang)
+
+    def reload(self, project):
+        """Restart with a new UI project, as the screen does after an OTA update."""
+        with self.lock:
+            lang = self.word(0x5247)
+            self.project = project
+            self.mem = bytearray(project.vpmem.data)
+            self.mem += bytes(max(0, 2 * 0x10000 - len(self.mem)))
+            self.set_word(0x5247, lang)
+            self.page, self.keypad = 0, None
+            self._bg, self._fonts, self._pictures = {}, {}, {}
+            self.font_path = os.path.join(project.root, 'truefont', 'font.ttf')
+            self._font_bytes = None
+            self._note('local', None, f'rebooted with {project.root}')
+            self._bump()
 
     # ---- memory -------------------------------------------------------------------
     def word(self, vp):
@@ -223,6 +239,22 @@ class ScreenSim:
                     dr.rectangle([min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)], outline=(255, 60, 60))
             return im
 
+    def _picture(self, vp):
+        """JPEG written by the host: VP = 5A A5, VP+1 = length, data from VP+2 (stock format)."""
+        if self.word(vp) != 0x5AA5:
+            return None
+        n = self.word(vp + 1)
+        data = bytes(self.mem[2 * (vp + 2):2 * (vp + 2) + n])
+        key = (vp, hash(data))
+        if self._pictures.get('key') != key:
+            try:
+                pic = Image.open(io.BytesIO(data)).convert('RGB')
+                pic.load()
+            except Exception:
+                pic = None
+            self._pictures = {'key': key, 'img': pic}
+        return self._pictures['img']
+
     def _draw_var(self, im, dr, r):
         x = r.data
         if r.type == 0x00:                                      # icon variable
@@ -246,6 +278,10 @@ class ScreenSim:
                 b = r.box
                 px = max(10, int(x[27] * 0.85))                 # ASSUMPTION: y dot size -> pixels
                 dr.text((min(b[0], b[2]), min(b[1], b[3])), s, font=self._font(px), fill=_rgb(r.color))
+        elif r.type == 0x08:                                    # JPEG picture control (thumbnail)
+            img = self._picture(r.vp)
+            if img is not None:
+                im.paste(img, tuple(r.pos))
         elif r.type == 0x26:                                    # thumbnail area: placeholder
             b = r.box
             dr.rectangle([b[0], b[1], b[2], b[3]], outline=(90, 90, 90))

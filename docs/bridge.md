@@ -55,25 +55,31 @@ The emulator log has every touch (with coordinates), every page change and every
   - **Print control:** pause, resume and cancel, with the stock confirm dialogs.
   - **Temperatures and speed:** keypad input for temperatures and speed.
   - **Preheat:** the PLA / ABS / PETG / TPU / Nylon / PA / custom presets, and cooldown.
-  - **Move page:** jog via the screen's own increment buttons (refused when the axis isn't homed or a print is active), homing, motors off.
+  - **Move page:** jog via the screen's own increment buttons (refused when the axis isn't homed or a print is active), homing (X, Y, all axes, X+Y as in the stock V2.0.3 firmware), motors off.
   - **Filament:** feed / retract with lengths remembered between sessions; when the nozzle is too cold, the "temperature insufficient" popup.
   - **Tune:** Z-offset babystepping (`SET_GCODE_OFFSET`), the runout sensor toggle, the `per_print_mesh` toggle, fan speed in % (`M106 S…` / `M107`; with the `fan_speed` UI, otherwise on/off).
   - **Bed mesh:** `mesh_gcode` from the auto-leveling page.
-  - **PID:** autotune for nozzle and bed (`PID_CALIBRATE`, then `SAVE_CONFIG` on Yes). The Temp PID tile opens the nozzle autotune page.
-  - **Velocity limits:** X/Y max acceleration, speed and corner velocity (`SET_VELOCITY_LIMIT`).
+  - **PID:** autotune for nozzle and bed (`PID_CALIBRATE`, then `SAVE_CONFIG` on Yes). The Temp PID tile opens the nozzle autotune page; save / back return to the autotune page of the same heater.
+  - **Velocity limits:** X/Y max acceleration, speed and corner velocity (`SET_VELOCITY_LIMIT`). The screen fields have one decimal, so values are sent ×10 (16-bit: at most 6553.5) and keypad input is divided by 10.
+  - **Thumbnails:** the file's largest Moonraker thumbnail, re-encoded as a 300×300 baseline JPEG and written to VP `0xC000` the stock way (240-byte chunks to `0xC002+`, 25 ms apart, then `5A A5 <len>` to `0xC000`). Shown on the file preview (119) and the printing pages (9–12); the Benchy (VP `0x4227`) is hidden there while a picture is loaded. About 1–2 s per picture; `thumbnails = false` turns it off.
+  - **Volume:** the ADV.SET volume toggle switches the screen's touch beep (VP `0x0080` = `5A 00 00 6C` on / `64` off, as the stock firmware does).
   - **Language:** fixed by `language` in the config (English by default). Picks on the screen's language page are ignored and undone.
   - **Spoolman:** the active spool (`/server/spoolman/status`, then `GET /v1/spool/<id>` through `/server/spoolman/proxy`) every `spoolman_interval` seconds: material badge, nearest colour swatch, name, remaining weight / length and vendor. "No active spool", "Spoolman offline" and "Spoolman not available" (no `[spoolman]` in Moonraker) are shown in the name line. `spoolman = false` turns it off. Badges: PLA, PETG, PLA-M (material or name says matte), PLA-CF and PETG-CF (CF or carbon), PLA-W (wood or bamboo), ABS, ASA, TPU (also TPE / flex) and PA (also nylon); any other material gets no badge and its name in front of the spool name. See `crm4bridge/spoolman.py`. Tapping the tile opens the spool picker (active spool first, then most recently used; six per page); a tap on a spool sets it active (`POST /server/spoolman/spool_id`) and returns to the page it came from.
   - **Machine page (custom, Tune 2/2 in place of WiFi):** Klipper `RESTART` and `FIRMWARE_RESTART`, host reboot and shutdown (`/machine/reboot`, `/machine/shutdown`), each after a Yes/No dialog, and an immediate EMERGENCY STOP. Firmware restart is also on Tune page 1 (`examples/firmware_restart_tile`). Host actions are refused while a print is running or paused. With `shutdown_plug` set (a Tasmota plug that powers the printer and the Pi), the bridge first sends the plug `Backlog Delay <n>; Power1 Off`, so the plug switches itself off `shutdown_plug_delay` seconds after the Pi has halted; if the plug can't be reached, the host is not shut down.
-  - **Everything else** shows the "not developed yet" popup (its Ok returns to the page the tap came from, `ui.NOT_SUPPORTED_RETURN`): Creality Wi-Fi/cloud, restore network, reset configuration, feedback, CR-Touch tests, improved accuracy, auto leveling data, power-loss recovery, home offsets, manual PID and PID cycle counts, steps/mm, Z/E velocity limits, auto sleep and volume. With the `klipper_ui` build these tiles no longer open their own pages first (`examples/unsupported_features`).
+  - **Everything else** shows the "not developed yet" popup (its Ok returns to the page the tap came from, `ui.NOT_SUPPORTED_RETURN`): Creality Wi-Fi/cloud, restore network, reset configuration, feedback, CR-Touch tests, improved accuracy, auto leveling data, power-loss recovery, home offsets (X/Y/Z), manual PID and PID cycle counts, steps/mm, Z/E velocity limits and auto sleep. With the `klipper_ui` build these tiles no longer open their own pages first (`examples/unsupported_features`).
 
 ## Assumptions to confirm on the real screen
 
-| Assumption | Where |
+Most of these are now confirmed from the stock mainboard firmware (V1.5.1 and V2.0.3, see the project notes "CR-M4 Stock Touchscreen - Mainboard Firmware RE"); what's left needs the real screen.
+
+| Assumption | Status |
 |---|---|
-| No CRC; DGUS-II write acks `5A A5 03 82 4F 4B` (the bridge ignores acks either way) | `crm4ui/dgus.py`, emulator `--no-ack` |
-| Touch / keypad / increment events arrive as `83 VP 01 value` | `ScreenSim.touch`, `Bridge.handle_frame` |
-| Page switch through VP `0x0084` = `5A 01 00 PP` (seen as a constant in the Creality firmware) | `dgus.set_page` |
-| Toggle icons: 2 = on, 3 = off; motors icon 10 = on, 11 = off | `crm4bridge/ui.py` |
-| Font sizes and number alignment in the emulator are approximate | `ScreenSim._draw_var` |
-| Start-up handshake: unknown; the bridge just repaints on connect and every 30 s | |
-| Thumbnails (`0x8800`), the PID temperature graph and the mesh grid are not driven yet | |
+| No CRC; write acks `5A A5 03 82 4F 4B` may come and are ignored | Firmware: confirmed (no CRC, acks dropped). Screen side: CRC off inferred from `config.txt` `R2=6C`. |
+| Touch / keypad / increment events arrive as `83 VP 01 value` | Confirmed; 32-bit fields (PID `0x7006`/`0x700A`, steps) send `83 VP 02 hi lo`, handled. |
+| Page switch through VP `0x0084` = `5A 01 00 PP` | Confirmed. |
+| Toggle icons 2 = on, 3 = off; motors 10 = on, 11 = off | Confirmed. |
+| Start-up handshake | None in the stock firmware: it waits 500 ms after power-up, then writes. |
+| UART: 115200 8N1 on the mainboard's USART6 (PC6 TX / PC7 RX), 3.3 V | Confirmed from the firmware; logic level at the screen connector still to measure. |
+| Thumbnail JPEG at `0xC000`, displayed by the screen | Format from the firmware; display on the real screen untested. |
+| Font sizes and number alignment in the emulator are approximate | |
+| Not driven yet: the PID temperature graph (`0x0310` curve writes), the mesh grid (`0x7100+`), the print-progress mask over the thumbnail (`0x8800`, SP `0x9001–0x9004`) | Formats known; to do. |

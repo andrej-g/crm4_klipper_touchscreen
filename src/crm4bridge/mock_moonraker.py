@@ -33,6 +33,34 @@ SPOOLS = [
 ]
 
 
+def _thumb_png(name, w, h):
+    """A made-up slicer thumbnail (needs Pillow; None without it)."""
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return None
+    import io
+    im = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    dr = ImageDraw.Draw(im)
+    hue = sum(name.encode()) % 6
+    col = [(230, 90, 60), (60, 160, 230), (90, 200, 90), (230, 200, 60), (180, 90, 220), (230, 130, 40)][hue]
+    dr.rounded_rectangle([w * 0.15, h * 0.3, w * 0.85, h * 0.85], radius=w // 12, fill=col + (255,))
+    dr.ellipse([w * 0.3, h * 0.1, w * 0.7, h * 0.5], fill=tuple(c // 2 for c in col) + (255,))
+    dr.text((w * 0.2, h * 0.88), name[:24], fill=(255, 255, 255, 255))
+    out = io.BytesIO()
+    im.save(out, 'PNG')
+    return out.getvalue()
+
+
+def _thumbs(name):
+    """Moonraker-style thumbnail list (the cube has none)."""
+    if name.startswith('calibration'):
+        return []
+    stem = name.rsplit('.', 1)[0]
+    return [{'width': w, 'height': h, 'size': 1000, 'relative_path': f'.thumbs/{stem}-{w}x{h}.png'}
+            for w, h in ((32, 32), (300, 300))]
+
+
 def spool_json(s):
     sid, vendor, name, mat, colour, rem, weight = s
     return {'id': sid, 'remaining_weight': rem, 'used_weight': weight - rem,
@@ -217,13 +245,30 @@ def make_handler(pr: Printer):
                 for name, est, fil, layers, lh in FILES:
                     if name == q.get('filename'):
                         return self._ok({'filename': name, 'estimated_time': est, 'filament_total': fil,
-                                         'object_height': layers * lh, 'layer_height': lh})
+                                         'object_height': layers * lh, 'layer_height': lh,
+                                         'thumbnails': _thumbs(name)})
                 return self._ok('file not found', 404)
             if p == '/server/spoolman/status':
                 return self._ok({'spoolman_connected': pr.spoolman_connected, 'pending_reports': [],
                                  'spool_id': pr.spool_id})
             if p == '/server/spoolman/spool_id':
                 return self._ok({'spool_id': pr.spool_id})
+            if p.startswith('/server/files/gcodes/'):
+                from urllib.parse import unquote
+                rel = unquote(p[len('/server/files/gcodes/'):])
+                folder, _, base = rel.rpartition('/')
+                if folder.endswith('.thumbs') and base.endswith('.png'):
+                    stem, _, dims = base[:-4].rpartition('-')
+                    w, _, h = dims.partition('x')
+                    png = _thumb_png(stem, int(w), int(h)) if w.isdigit() and h.isdigit() else None
+                    if png:
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'image/png')
+                        self.send_header('Content-Length', str(len(png)))
+                        self.end_headers()
+                        self.wfile.write(png)
+                        return
+                return self._ok('file not found', 404)
             if p == '/server/history/totals':
                 return self._ok({'job_totals': {'total_print_time': 123.4 * 3600}})
             return self._ok('not found', 404)

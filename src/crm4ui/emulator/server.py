@@ -79,12 +79,43 @@ es.onmessage = ev => {
 
 
 class Link:
-    """Host link: TCP server (one client at a time) or a serial port."""
+    """Host link: TCP server (one client at a time) or a serial port.
 
-    def __init__(self, sim, spec):
+    Also accepts the screen update protocol (``crm4ui flash``): received files go to
+    ``ota_dir`` (a copy of the current UI), and ``$reboot#`` reloads the emulator from it.
+    """
+
+    def __init__(self, sim, spec, ota_dir=None):
         self.sim, self.spec, self.status = sim, spec, 'waiting'
         self._out = None
+        self.ota_dir = ota_dir or os.path.abspath(sim.project.root).rstrip('/\\') + '.ota'
         sim.send = self.send
+
+    def _ota_receiver(self):
+        import shutil
+        from ..ota import Receiver, screen_path_to_rel
+
+        def on_file(path, data):
+            if not os.path.isdir(self.ota_dir):
+                shutil.copytree(self.sim.project.root, self.ota_dir)
+            dst = os.path.join(self.ota_dir, screen_path_to_rel(path))
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, 'wb') as fh:
+                fh.write(data)
+            self.sim._note('local', None, f'OTA: {path} ({len(data)} B)')
+
+        def on_reboot():
+            if os.path.isdir(self.ota_dir):
+                self.sim.reload(Project(self.ota_dir))
+        return Receiver(on_file, on_reboot)
+
+    def _raw(self, data):
+        out = self._out
+        if out is not None and data:
+            try:
+                out(data)
+            except OSError:
+                self._out = None
 
     def send(self, frame):
         out = self._out
@@ -100,13 +131,19 @@ class Link:
         threading.Thread(target=target, args=(arg,), daemon=True).start()
 
     def _pump(self, read):
-        parser = dgus.Parser()
+        parser, ota = dgus.Parser(), self._ota_receiver()
         while True:
             data = read()
             if not data:
                 return
-            for f in parser.feed(data):
-                self.sim.handle_host(f)
+            self._feed(parser, ota, data)
+
+    def _feed(self, parser, ota, data):
+        if not parser.buf:                              # OTA commands start at a frame boundary
+            replies, data = ota.feed(data)
+            self._raw(replies)
+        for f in parser.feed(data):
+            self.sim.handle_host(f)
 
     def _serve_tcp(self, arg):
         host, _, port = arg.rpartition(':')
@@ -130,12 +167,11 @@ class Link:
         ser = serial.Serial(port, int(baud or 115200), timeout=0.05)
         self.status = f'serial {port}'
         self._out = ser.write
-        parser = dgus.Parser()
+        parser, ota = dgus.Parser(), self._ota_receiver()
         while True:
             data = ser.read(256)
             if data:
-                for f in parser.feed(data):
-                    self.sim.handle_host(f)
+                self._feed(parser, ota, data)
 
 
 def make_handler(sim, link):
@@ -210,13 +246,14 @@ def main(argv=None):
     ap.add_argument('--lang', type=int, help='preset UI language VP 0x5247 (1 = English); normally the host sets it')
     ap.add_argument('--no-ack', action='store_true', help='do not answer VP writes with 5A A5 03 82 4F 4B')
     ap.add_argument('--log', help='append every touch / frame / page change to this text file')
+    ap.add_argument('--ota-dir', help='where `crm4ui flash` updates land (default: <private>.ota)')
     a = ap.parse_args(argv)
 
     sim = ScreenSim(Project(a.private), start_page=a.page, lang=a.lang, ack_writes=not a.no_ack)
     sim.log_file = a.log
     if a.log:
         os.makedirs(os.path.dirname(os.path.abspath(a.log)), exist_ok=True)
-    link = Link(sim, a.link)
+    link = Link(sim, a.link, a.ota_dir)
     link.start()
     host, _, port = a.http.rpartition(':')
     httpd = ThreadingHTTPServer((host or '127.0.0.1', int(port)), make_handler(sim, link))

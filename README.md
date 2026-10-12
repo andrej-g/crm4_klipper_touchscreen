@@ -84,13 +84,19 @@ Against a real printer, leave out `--live`; the bridge then only logs the comman
 
 ## Flashing a build onto the screen
 
-Keep the untouched stock `private/` + `firmware.zlib` on a separate card; re-flashing them is the recovery path. **Never modify `firmware.zlib`.**
+Keep the untouched stock `private/` + `firmware.zlib` on a separate SD card; re-flashing them is the recovery path. **Never modify `firmware.zlib`.**
 
 1. **Screen microSD slot** (DACAI native; the method in Creality's V1.2.2 readme). Copy `private/` and `firmware.zlib` to the root of a FAT32 card (4096-byte clusters). Insert it, power-cycle, and **remove the card when done**, or it updates again on every boot.
-2. **Front USB port**, through Creality's mainboard bootloader. It is still present under Klipper, since Klipper is built with the 64 KiB bootloader offset. Untested.
-3. **From the Klipper host** over the screen UART (`$cfgenter#`, `$file,…#`, `$reboot#`). The packet format is not decoded yet.
+2. **Over the screen's serial link** (`crm4ui flash`), the protocol Creality's mainboard bootloader uses (`$cfgenter#`, `$file,…#` + 2052-byte packets, `$reboot#`, `$cfgexit#`). Stop the bridge first; it needs the port.
 
-Open questions for the first test: does a partial (`--changed-only`) update keep the other files, and does the screen accept page ids it never had?
+   ```sh
+   crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --dry-run          # list what would be sent
+   crm4ui flash build/klipper --port serial:/dev/ttyAMA0                    # everything (~15 min at 115200)
+   crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --changed-from build/klipper.prev   # only what changed
+   ```
+
+   About 10 KiB/s. Not yet tried on the real screen: whether files that are not sent are kept, and whether a failed update can be retried. The emulator accepts it too (`--port tcp:127.0.0.1:7901`): received files land in `<private>.ota` and it reboots into them.
+3. **Front USB port**, through Creality's mainboard bootloader (`STM32F4_UPDATE/private` on a USB stick). Untested under Klipper.
 
 ## Documentation
 

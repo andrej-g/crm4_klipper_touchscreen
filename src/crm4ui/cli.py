@@ -5,6 +5,7 @@
     crm4ui render  PRIVATE OUT [--lang N]        page previews with labels and overlay
     crm4ui export  PRIVATE OUT                   upright PNGs of all pages and icons
     crm4ui build   STOCK_PRIVATE SPEC OUT        apply a spec, write a new private/
+    crm4ui flash   PRIVATE --port serial:/dev/ttyAMA0   send private/ to the screen over its UART
 """
 import argparse
 import os
@@ -40,6 +41,33 @@ def cmd_render(a):
     pages = [int(x, 0) for x in a.pages.split(',')] if a.pages else None
     done = render_all(prj, a.out, lang=a.lang, overlay=not a.no_overlay, pages=pages)
     print(f'{len(done)} pages rendered -> {a.out}')
+    return 0
+
+
+def cmd_flash(a):
+    from . import ota
+    only = None
+    if a.changed_from:
+        ref, new = tree_digest(a.changed_from), tree_digest(a.private)
+        only = {k for k in new if new[k] != ref.get(k)}
+    if a.files:
+        only = (only or set()) | {f.replace('\\', '/') for f in a.files}
+    files = ota.plan(a.private, only)
+    if not files:
+        print('nothing to send')
+        return 0
+    if a.dry_run:
+        ota.Sender(None).run(files, dry_run=True)
+        return 0
+    port = ota.Port(a.port)
+    try:
+        ota.Sender(port).run(files)
+    except ota.OtaError as e:
+        print(f'error: {e}', file=sys.stderr)
+        return 1
+    finally:
+        port.close()
+    print('done; the screen reboots into the new UI')
     return 0
 
 
@@ -107,6 +135,15 @@ def main(argv=None):
     p.add_argument('--force', action='store_true')
     p.add_argument('--quiet', action='store_true')
     p.set_defaults(fn=cmd_build)
+
+    p = sub.add_parser('flash', help='send a private/ dir to the screen over its serial link (stop the bridge first)')
+    p.add_argument('private')
+    p.add_argument('--port', required=True, help='serial:/dev/ttyAMA0[@115200], or tcp:127.0.0.1:7901 for the emulator')
+    p.add_argument('--changed-from', metavar='REF_PRIVATE',
+                   help='send only files that differ from this private/ dir (e.g. what is on the screen now)')
+    p.add_argument('--files', nargs='+', metavar='REL', help='send only these files (relative, e.g. bin/13.bin)')
+    p.add_argument('--dry-run', action='store_true', help='list what would be sent')
+    p.set_defaults(fn=cmd_flash)
 
     a = ap.parse_args(argv)
     return a.fn(a)

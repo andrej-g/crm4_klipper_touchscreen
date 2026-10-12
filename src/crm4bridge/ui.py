@@ -64,11 +64,11 @@ VP_FEED_LEN, VP_RETRACT_LEN = 0x7062, 0x7064             # x10 mm
 VP_LEVEL_PROGRESS = 0x7066
 VP_PID_NOZZLE_TEMP, VP_PID_NOZZLE_CYCLES = 0x7070, 0x7072
 VP_PID_BED_TEMP, VP_PID_BED_CYCLES = 0x7074, 0x7076
-VP_PID = {'extruder': (0x7000, 0x7002, 0x7004), 'heater_bed': (0x7006, 0x7008, 0x700A)}   # x100
-VP_MAX_ACCEL = (0x7014, 0x7016, 0x7018, 0x701A)          # X Y Z E
+VP_PID = {'extruder': (0x7000, 0x7002, 0x7004), 'heater_bed': (0x7006, 0x7008, 0x700A)}   # x100; 0x7006/0x700A 32-bit
+VP_MAX_ACCEL = (0x7014, 0x7016, 0x7018, 0x701A)          # X Y Z E; all velocity VPs x10 (1 decimal)
 VP_MAX_SPEED = (0x701C, 0x701E, 0x7020, 0x7022)
 VP_MAX_CORNER = (0x7024, 0x7026, 0x7028)
-VP_STEPS = (0x702A, 0x702C, 0x702E, 0x7030)              # x10
+VP_STEPS = (0x702A, 0x702C, 0x702E, 0x7030)              # x100, 32-bit
 VP_TOTAL_HOURS = 0x7132                                  # x10
 
 # toggles (icon variables): value 2 = on, 3 = off
@@ -79,6 +79,10 @@ VP_TOGGLE_SLEEP = 0x421B
 VP_TOGGLE_AUTOLEVEL = 0x421C
 VP_TOGGLE_MOTORS = 0x421D          # value 10 = on, 11 = off
 VP_TOGGLE_VOLUME = 0x4224
+VP_TOGGLE_WIFI = 0x4220
+VP_SYS_CONFIG = 0x0080              # DGUS system config: 5A 00 00 6C = touch beep on, 64 = off
+SYS_CONFIG_BEEP_ON, SYS_CONFIG_BEEP_OFF = 0x6C, 0x64
+VP_HOME_OFFSET_Z = 0x707C
 VP_LANG_CHECK = tuple(range(0x4229, 0x4232))             # page 120: 1 shows the tick
 
 # presets: (nozzle VP, bed VP)
@@ -103,8 +107,8 @@ TXT_MACHINE_MSG = (0x9040, 40)
 TXT_SHUTDOWN_NOTE = (0x9050, 40)
 
 # ---- key VPs (screen -> host) -------------------------------------------------------
-K_MAIN = 0x4002        # 1 file, 2 finish(done page), 3 prepare, 4 settings, 5 print tab, 6 language ok
-K_TUNE = 0x4004        # 1 tune tile, 2 back, 3 fan, 4 autolevel, 5 boot touch, 6 z-offset, 7 runout, 8 back, 9 sleep
+K_MAIN = 0x4002        # 1 file, 2 finish(done page), 3 prepare, 4 settings, 5 Print (Home) tab, 6 language ok
+K_TUNE = 0x4004        # 1 tune tile, 2 back, 3 fan, 4 autolevel, 5 boot touch, 6 unused, 7 runout, 8 save, 9 sleep
 K_STOP = 0x4008        # 0 stop button, F1 yes, F0 no
 K_PAUSE = 0x400A       # 0 pause button, F1 yes, F0 no
 K_RESUME = 0x400C      # 1 resume, 2 runout yes
@@ -114,11 +118,11 @@ K_PREHEAT = 0x4030     # 0 back, 1 more, 3 fan, 4 cooldown, 5 PLA, 6 ABS, 7 PETG
 K_PREPARE = 0x403E     # 1 autolevel, 2 feed, 3 move, 4 language, 5 about, 6 motors off, 7 feedback, 9 wifi, A usb ok, B not-supported ok
 K_BACK = 0x4040        # 0 / 1 back
 K_LEVEL = 0x4044       # 0 start, F1 yes, F0 no
-K_HOME = 0x4046        # 0..2 step pages, 3 X, 4 Y, 5 Z, 6 all
+K_HOME = 0x4046        # 0..2 step pages, 3 X, 4 Y, 5 all axes, 6 X+Y (stock V2.0.3)
 K_EXTRUDE = 0x4056     # 1 retract, 2 feed, 5 need-heat yes, 6 need-heat no
 K_FILES = 0x40D2       # 0 back, 1 start (preview), 9 preview back, paging keys handled by the screen
 K_FILE_ROW = 0x40D3    # 1..24
-K_ADV = 0x4104         # 7/8 toggles, 9 CR-touch, 0 back
+K_ADV = 0x4104         # 4 steps/mm, 7 auto-leveling data page, 8 toggle 0x4228, 9 CR-touch, 0 back
 K_ADV2 = 0x4105        # 1/2 mesh points, 3..5 CR-touch, 6 volume, 8 home offsets, 9 more preheat
 K_PID_NAV = 0x401F
 K_PID = 0x410F         # 1 start nozzle, 3 start bed, 2/4 yes (save), 5/6 back
@@ -157,7 +161,7 @@ NOT_SUPPORTED_RETURN = {
     (K_ADV, 7): PAGE_ADV, (K_ADV, 8): PAGE_ADV, (K_ADV, 9): PAGE_ADV,
     (K_ADV2, 1): PAGE_ADV, (K_ADV2, 2): PAGE_ADV,            # mesh points (133)
     (K_ADV2, 3): PAGE_ADV, (K_ADV2, 4): PAGE_ADV, (K_ADV2, 5): PAGE_ADV,   # CR-Touch test (136)
-    (K_ADV2, 6): PAGE_ADV, (K_ADV2, 8): PAGE_ADV,
+    (K_ADV2, 8): PAGE_ADV,
     (0x410C, None): PAGE_ADV,                                # home offsets (140-142)
     (K_PREPARE, 7): PAGE_TUNE2, (K_PREPARE, 9): PAGE_TUNE2,  # Feedback, WiFi
     (K_RESET_CFG, None): PAGE_TUNE2, (K_RESTORE_NET, None): PAGE_TUNE2,
@@ -167,8 +171,14 @@ NOT_SUPPORTED_RETURN = {
     (VP_MAX_ACCEL[2], None): 128, (VP_MAX_ACCEL[3], None): 128,
     (VP_MAX_SPEED[2], None): 129, (VP_MAX_SPEED[3], None): 129,
     (VP_MAX_CORNER[2], None): 130,
+    (VP_HOME_OFFSET_Z, None): PAGE_ADV,                      # home offsets (140-142)
 }
 for _vp in VP_PID['extruder'] + VP_PID['heater_bed']:
     NOT_SUPPORTED_RETURN[(_vp, None)] = PAGE_TUNE            # manual PID page (114)
 for _vp in VP_STEPS:
     NOT_SUPPORTED_RETURN[(_vp, None)] = PAGE_TUNE            # steps page (131)
+
+# thumbnail picture (crm4bridge.thumbnail): pages that show the 0xC000 picture
+THUMB_PREVIEW_PAGES = {119}
+THUMB_PRINT_PAGES = {9, 10, 11, 12}
+MASCOT_SHOWN, MASCOT_HIDDEN = 4, 0

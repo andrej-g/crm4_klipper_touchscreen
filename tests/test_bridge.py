@@ -163,7 +163,7 @@ class BridgeTest(unittest.TestCase):
     def test_creality_only_tiles(self):
         b = self.make()
         for vp, k in ((ui.K_RESET_CFG, 0), (ui.K_RESTORE_NET, 0), (ui.K_ADV, 9), (ui.K_ADV, 4),
-                      (ui.K_ADV2, 6), (ui.K_ADV2, 8), (ui.K_PREPARE, 7), (ui.K_TUNE, 9),
+                      (ui.K_ADV2, 8), (ui.K_PREPARE, 7), (ui.K_TUNE, 9),
                       (ui.K_PID_NAV, 5), (ui.VP_PID_NOZZLE_CYCLES, 5)):
             self.link.sent.clear()
             self.key(b, vp, k)
@@ -179,16 +179,8 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual(w[ui.VP_LANG_CHECK[2]], 0)
         self.assertIsNone(b.state.get('language'))
 
-
-class _Inline:
-    def submit(self, fn):
-        fn()
-
-
-
-class NotSupportedReturnTest(BridgeTest):
     def test_ok_returns_to_origin_page(self):
-        cases = [((ui.K_ADV, 8), ui.PAGE_ADV), ((ui.K_ADV2, 6), ui.PAGE_ADV), ((ui.K_PREPARE, 7), ui.PAGE_TUNE2),
+        cases = [((ui.K_ADV, 8), ui.PAGE_ADV), ((ui.K_ADV2, 8), ui.PAGE_ADV), ((ui.K_PREPARE, 7), ui.PAGE_TUNE2),
                  ((ui.K_TUNE, 9), 14), ((ui.K_PID_NAV, 5), ui.PAGE_TUNE), ((ui.VP_MAX_SPEED[3], 50), 129)]
         b = self.make()
         for (vp, v), page in cases:
@@ -197,6 +189,55 @@ class NotSupportedReturnTest(BridgeTest):
             self.assertEqual(self.link.pages()[-1], ui.PAGE_NOT_SUPPORTED)
             self.key(b, ui.K_PREPARE, 0xB)           # Ok
             self.assertEqual(self.link.pages()[-1], page, (hex(vp), v))
+
+
+    def test_homing_keys(self):
+        b = self.make()
+        for k, cmd in ((3, 'G28 X'), (4, 'G28 Y'), (5, 'G28'), (6, 'G28 X Y')):
+            self.moon.calls.clear()
+            self.key(b, ui.K_HOME, k)
+            self.assertEqual(self.moon.calls[0], ('gcode', cmd))
+
+    def test_velocity_scaled_by_10(self):
+        b = self.make()
+        self.assertEqual(self.link.words()[ui.VP_MAX_ACCEL[0]], 17000)        # 1700 mm/s^2 -> 1700.0
+        self.assertEqual(self.link.words()[ui.VP_MAX_CORNER[0]], 50)
+        self.key(b, ui.VP_MAX_ACCEL[0], 25000)                                # keypad 2500.0
+        self.key(b, ui.VP_MAX_CORNER[1], 75)                                  # 7.5
+        self.assertIn(('gcode', 'SET_VELOCITY_LIMIT ACCEL=2500'), self.moon.calls)
+        self.assertIn(('gcode', 'SET_VELOCITY_LIMIT SQUARE_CORNER_VELOCITY=7.5'), self.moon.calls)
+
+    def test_pid_pages_return_to_autotune(self):
+        b = self.make()
+        for k, page in ((2, ui.PAGE_PID_NOZZLE), (4, ui.PAGE_PID_BED), (5, ui.PAGE_PID_NOZZLE), (6, ui.PAGE_PID_BED)):
+            self.key(b, ui.K_PID, k)
+            self.assertEqual(self.link.pages()[-1], page)
+
+    def test_two_word_event(self):
+        from crm4ui import dgus
+        b = self.make()
+        b.handle_frame(dgus.reply_words(0x7006, 0x0001, 0x86A0))              # 100000, a 32-bit PID field
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_NOT_SUPPORTED)
+        self.assertEqual(dgus.reply_words(0x7006, 0xFFFF, 0xFFFE).signed_value, -2)
+        self.key(b, ui.VP_HOME_OFFSET_Z, 5)
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_NOT_SUPPORTED)
+
+    def test_volume_toggles_touch_beep(self):
+        b = self.make()
+        b.push_static()
+        sent = {f.vp: f.payload() for f in self.link.sent if f.cmd == 0x82}
+        self.assertEqual(sent[ui.VP_SYS_CONFIG], bytes([0x5A, 0, 0, 0x6C]))
+        self.assertEqual(self.link.words()[ui.VP_TOGGLE_VOLUME], ui.TOGGLE_ON)
+        self.key(b, ui.K_ADV2, 6)
+        sent = {f.vp: f.payload() for f in self.link.sent if f.cmd == 0x82}
+        self.assertEqual(sent[ui.VP_SYS_CONFIG], bytes([0x5A, 0, 0, 0x64]))
+        self.assertEqual(self.link.words()[ui.VP_TOGGLE_VOLUME], ui.TOGGLE_OFF)
+        self.assertEqual(b.state.get('volume'), False)
+
+
+class _Inline:
+    def submit(self, fn):
+        fn()
 
 
 if __name__ == '__main__':
