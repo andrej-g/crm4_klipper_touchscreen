@@ -244,12 +244,12 @@ def main(argv=None):
     ap.add_argument('--link', default='tcp:127.0.0.1:7901', help='tcp:[host:]port or serial:PORT[@baud]')
     ap.add_argument('--page', type=int, default=0, help='start page (default 0, the splash)')
     ap.add_argument('--lang', type=int, help='preset UI language VP 0x5247 (1 = English); normally the host sets it')
-    ap.add_argument('--no-ack', action='store_true', help='do not answer VP writes with 5A A5 03 82 4F 4B')
+    ap.add_argument('--ack', action='store_true', help='answer VP writes with 5A A5 03 82 4F 4B (the CR-M4 screen does not)')
     ap.add_argument('--log', help='append every touch / frame / page change to this text file')
     ap.add_argument('--ota-dir', help='where `crm4ui flash` updates land (default: <private>.ota)')
     a = ap.parse_args(argv)
 
-    sim = ScreenSim(Project(a.private), start_page=a.page, lang=a.lang, ack_writes=not a.no_ack)
+    sim = ScreenSim(Project(a.private), start_page=a.page, lang=a.lang, ack_writes=a.ack)
     sim.log_file = a.log
     if a.log:
         os.makedirs(os.path.dirname(os.path.abspath(a.log)), exist_ok=True)

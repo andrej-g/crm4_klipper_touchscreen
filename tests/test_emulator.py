@@ -26,7 +26,9 @@ class EmulatorTest(unittest.TestCase):
         s.handle_host(dgus.write_words(0x7046, 215))
         s.handle_host(dgus.set_page(1))
         self.assertEqual((s.word(0x7046), s.page), (215, 1))
-        self.assertIn(dgus.ACK, self.sent)
+        self.assertNotIn(dgus.ACK, self.sent)                    # the CR-M4 screen sends no acks
+        s.handle_host(dgus.read_words(0x0014, 1))
+        self.assertEqual(self.sent[-1], dgus.reply_words(0x0014, 1))   # current page
         s.render()                                    # must not raise
 
     def test_return_key(self):

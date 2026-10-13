@@ -20,12 +20,12 @@ KEYBOARD_BACKSPACE, KEYBOARD_ESC, KEYBOARD_OK = 0xF2, 0xF0, 0xF1
 
 
 class ScreenSim:
-    def __init__(self, project, start_page=0, lang=None, ack_writes=True, font_path=None):
+    def __init__(self, project, start_page=0, lang=None, ack_writes=False, font_path=None):
         self.project = project
         self.mem = bytearray(project.vpmem.data)
         self.mem += bytes(max(0, 2 * 0x10000 - len(self.mem)))        # full 64 Ki-word space
         self.page = start_page
-        self.ack_writes = ack_writes                                   # ASSUMPTION: DGUS-II "OK" acks
+        self.ack_writes = ack_writes          # the CR-M4 screen sends no acks (config RC bit 3 = 0)
         self.keypad = None
         self.lock = threading.RLock()
         self.changed = threading.Condition(self.lock)
@@ -115,6 +115,8 @@ class ScreenSim:
                 self._bump()
             elif frame.cmd == dgus.CMD_READ and len(frame.data) >= 3:
                 vp, n = frame.vp, frame.data[2]
+                if vp < 0x1000:
+                    self.set_word(0x0014, self.page)      # the screen refreshes the current page first
                 self._note('host->scr', frame, f'read 0x{vp:04X} x{n}')
                 self._emit(dgus.reply_words(vp, *[self.word(vp + i) for i in range(n)]), 'read reply')
             else:

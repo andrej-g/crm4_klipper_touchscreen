@@ -95,7 +95,7 @@ Keep the untouched stock `private/` + `firmware.zlib` on a separate SD card; re-
    crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --changed-from build/klipper.prev   # only what changed
    ```
 
-   About 10 KiB/s. Not yet tried on the real screen: whether files that are not sent are kept, and whether a failed update can be retried. The emulator accepts it too (`--port tcp:127.0.0.1:7901`): received files land in `<private>.ota` and it reboots into them.
+   About 10 KiB/s. From the screen firmware: each file is overwritten as a whole, nothing else is touched or deleted, and order does not matter, so a failed or partial update can simply be re-run. Not yet tried on the real screen. The emulator accepts it too (`--port tcp:127.0.0.1:7901`): received files land in `<private>.ota` and it reboots into them.
 3. **Front USB port**, through Creality's mainboard bootloader (`STM32F4_UPDATE/private` on a USB stick). Untested under Klipper.
 
 ## Documentation

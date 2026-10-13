@@ -10,7 +10,7 @@ Screen OTA protocol.md`` in the project notes); everything at 115200 8N1:
     $reboot#                                     after all files (1 s pause before)
     $cfgexit#                                    leave download mode (1 s pause before)
 
-* after ``$file``: floor(size/2048)+1 packets of 2052 bytes::
+* after ``$file``: ceil(size/2048) packets of 2052 bytes::
 
     id, ~id, 2048 data bytes (zero padded), ~sum16 big-endian (sum of bytes 0..2049)
 
@@ -20,8 +20,9 @@ Only ``.txt .bin .zico .zbmp .ttf .ini`` files are sent, directory by directory:
 the root of ``private/`` (``config.txt``), then ``bin``, ``icon``, ``image``,
 ``truefont``. ``firmware.zlib`` is never sent.
 
-Unverified on the real screen: whether files that are not sent survive, whether
-order matters, how fast ``$ok#`` comes back. Keep the stock files on an SD card.
+From the screen firmware (stage 2): files are opened create-always, nothing is
+deleted, order does not matter, a duplicate packet is re-acked, 300 ms without
+data ends a transfer. Still untested on the real screen: keep the stock files on SD.
 """
 import os
 import socket
@@ -58,7 +59,10 @@ def check_packet(data):
 
 
 def packet_count(size):
-    return size // PKT_DATA + 1                    # stock: always one more (possibly empty)
+    # The stock bootloader sends floor(size/2048)+1, but the screen's receiver stops once
+    # `size` bytes are written (screen firmware RE, stage 2): an extra empty packet for a
+    # size that is a multiple of 2048 is never read or acked. So send exactly ceil().
+    return -(-size // PKT_DATA)
 
 
 def plan(private, only=None):
@@ -280,6 +284,10 @@ class Receiver:
             except ValueError:
                 return b'$err#'
             self.file = [path, size, packet_count(size), 0, bytearray()]
+            if self.file[2] == 0:                 # empty file: nothing to receive
+                if self.on_file:
+                    self.on_file(path, b'')
+                self.file = None
             return OK
         return b'$err#'
 

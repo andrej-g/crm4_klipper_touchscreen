@@ -33,7 +33,7 @@ class PacketTest(unittest.TestCase):
         self.assertIsNone(ota.check_packet(bytes(bad)))
 
     def test_packet_count(self):
-        self.assertEqual([ota.packet_count(n) for n in (0, 1, 2047, 2048, 4097)], [1, 1, 1, 2, 3])
+        self.assertEqual([ota.packet_count(n) for n in (0, 1, 2047, 2048, 4097)], [0, 1, 1, 1, 3])
 
     def test_plan_order_and_filter(self):
         with tempfile.TemporaryDirectory() as d:
@@ -91,7 +91,7 @@ class SenderTest(unittest.TestCase):
     def test_round_trip(self):
         with tempfile.TemporaryDirectory() as d:
             os.makedirs(os.path.join(d, 'bin'))
-            blobs = {'config.txt': b'R1=07\n', 'bin/13.bin': os.urandom(5000), 'bin/22.bin': bytes(4096)}
+            blobs = {'config.txt': b'R1=07\n', 'bin/13.bin': os.urandom(5000), 'bin/22.bin': bytes(4096), 'bin/e.bin': b''}
             for rel, data in blobs.items():
                 _write(os.path.join(d, rel), data)
             screen = self.run_update(ota.plan(d), drop=2)

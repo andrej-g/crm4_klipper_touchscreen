@@ -74,7 +74,7 @@ Most of these are now confirmed from the stock mainboard firmware (V1.5.1 and V2
 
 | Assumption | Status |
 |---|---|
-| No CRC; write acks `5A A5 03 82 4F 4B` may come and are ignored | Firmware: confirmed (no CRC, acks dropped). Screen side: CRC off inferred from `config.txt` `R2=6C`. |
+| No CRC; no write acks | Confirmed on both sides: `config.txt` `R2=6C` has CRC (bit 4) off and register RC (write ack) is unset, so the screen sends no `4F 4B`. The emulator matches (`--ack` turns acks on). |
 | Touch / keypad / increment events arrive as `83 VP 01 value` | Confirmed; 32-bit fields (PID `0x7006`/`0x700A`, steps) send `83 VP 02 hi lo`, handled. |
 | Page switch through VP `0x0084` = `5A 01 00 PP` | Confirmed. |
 | Toggle icons 2 = on, 3 = off; motors 10 = on, 11 = off | Confirmed. |
