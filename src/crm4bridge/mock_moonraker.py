@@ -4,10 +4,13 @@ developing the bridge without a real printer.
     python -m crm4bridge.mock_moonraker [--port 7125] [--print-seconds 600]
 
 Implements the endpoints the bridge uses. Heaters move towards their targets,
-prints advance in real time, and a handful of G-codes are interpreted.
+prints advance in real time, and a handful of G-codes are interpreted. A 50x50
+bed mesh (tilted, slightly bowed) is loaded unless --no-mesh; PID_CALIBRATE
+makes the heater oscillate around its target for --pid-seconds, then finishes.
 """
 import argparse
 import json
+import math
 import re
 import threading
 import time
@@ -31,6 +34,29 @@ SPOOLS = [
     (6, 'Generic', 'Silk Gold Sample With A Very Long Name', 'PLA', 'C9A227', 20.0, 50),
     (7, 'Generic', 'Translucent Red', 'ASA', 'BF4140', 750.0, 1000),
 ]
+
+
+MESH_MIN, MESH_MAX, MESH_N = (50.0, 18.0), (420.0, 420.0), 50
+PID_CYCLES = 5              # oscillations per simulated autotune
+
+
+def make_mesh(seed=0, n=MESH_N):
+    """A plausible 50x50 mesh: a plane tilted a little in X and Y with a shallow bowl in the
+    middle, about -0.13..+0.02 mm like the real bed. ``seed`` shifts it slightly so a
+    re-probe gives different numbers."""
+    (x0, y0), (x1, y1) = MESH_MIN, MESH_MAX
+    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+    rows = []
+    for j in range(n):
+        y = y0 + (y1 - y0) * j / (n - 1)
+        row = []
+        for i in range(n):
+            x = x0 + (x1 - x0) * i / (n - 1)
+            bowl = ((x - cx) / (x1 - x0)) ** 2 + ((y - cy) / (y1 - y0)) ** 2    # 0 centre .. 0.5 corner
+            z = -0.06 + 0.00012 * (x - cx) - 0.00008 * (y - cy) - 0.10 * bowl + 0.003 * seed
+            row.append(round(z + 0.0015 * math.sin(i * 1.7 + j * 0.9 + seed), 6))
+        rows.append(row)
+    return rows
 
 
 def _thumb_png(name, w, h):
@@ -72,9 +98,14 @@ def spool_json(s):
 
 
 class Printer:
-    def __init__(self, print_seconds):
+    def __init__(self, print_seconds, pid_seconds=40.0, mesh=True):
         self.lock = threading.Lock()
         self.print_seconds = print_seconds
+        self.pid_seconds = pid_seconds
+        self.mesh_seed = 0
+        self.mesh = make_mesh() if mesh else None
+        self.mesh_name = 'default' if mesh else ''
+        self.pid = None                                      # {'heater', 'target', 't0'} while PID_CALIBRATE runs
         self.klippy = 'ready'
         self.klippy_msg = 'Printer is ready'
         self.t = {'extruder': [23.0, 0.0], 'heater_bed': [23.0, 0.0]}
@@ -97,7 +128,17 @@ class Printer:
 
     def tick(self, dt):
         with self.lock:
-            for h in self.t.values():
+            pid = self.pid
+            for name, h in self.t.items():
+                if pid and pid['heater'] == name:
+                    # autotune: relay oscillation around the target, amplitude settling 10 -> 3 C
+                    el = time.monotonic() - pid['t0']
+                    amp = max(3.0, 10.0 - 7.0 * el / self.pid_seconds)
+                    h[0] = pid['target'] + amp * math.sin(2 * math.pi * PID_CYCLES * el / self.pid_seconds)
+                    h[1] = pid['target']
+                    if el >= self.pid_seconds:
+                        self.pid = None
+                    continue
                 goal = h[1] if h[1] > 23 else 23.0
                 h[0] += (goal - h[0]) * min(1.0, dt * (0.15 if h[1] else 0.03))
             if self.print['state'] == 'printing':
@@ -126,6 +167,11 @@ class Printer:
             'idle_timeout': {'state': 'Printing' if self.print['state'] == 'printing' else 'Idle'},
             'filament_switch_sensor filament_sensor': dict(self.sensor),
             'gcode_macro PRINT_START': {'per_print_mesh': self.per_print_mesh},
+            'bed_mesh': {'profile_name': self.mesh_name if self.mesh else '',
+                         'mesh_min': list(MESH_MIN) if self.mesh else [0, 0],
+                         'mesh_max': list(MESH_MAX) if self.mesh else [0, 0],
+                         'probed_matrix': self.mesh or [[]], 'mesh_matrix': self.mesh or [[]],
+                         'profiles': {'default': {}}},
         }
         return {k: v for k, v in all_.items() if k in wanted}
 
@@ -172,8 +218,31 @@ class Printer:
                         self.max_velocity = float(v)
                     elif k == 'SQUARE_CORNER_VELOCITY':
                         self.scv = float(v)
-            elif u.startswith(('PID_CALIBRATE', 'BED_MESH_CALIBRATE')):
+            elif u.startswith('PID_CALIBRATE'):
+                m = re.search(r'HEATER=(\w+)', u)
+                t = re.search(r'TARGET=([\d.]+)', u)
+                heater = (m.group(1).lower() if m else 'extruder')
+                if heater not in self.t:
+                    raise ValueError(f'unknown heater {heater}')
+                with self.lock:
+                    self.pid = {'heater': heater, 'target': float(t.group(1)) if t else 200.0,
+                                't0': time.monotonic()}
+                while self.pid:                              # Moonraker blocks until the script is done
+                    time.sleep(0.2)
+            elif u.startswith('BED_MESH_CALIBRATE'):
                 time.sleep(5)
+                m = re.search(r'PROFILE=(\S+)', line, re.I)
+                with self.lock:
+                    self.mesh_seed += 1
+                    self.mesh, self.mesh_name = make_mesh(self.mesh_seed), (m.group(1) if m else 'default')
+            elif u.startswith('BED_MESH_CLEAR'):
+                with self.lock:
+                    self.mesh, self.mesh_name = None, ''
+            elif u.startswith('BED_MESH_PROFILE'):
+                m = re.search(r'LOAD=(\S+)', line, re.I)
+                if m:
+                    with self.lock:
+                        self.mesh, self.mesh_name = make_mesh(self.mesh_seed), m.group(1)
             elif u == 'SAVE_CONFIG':
                 self._restart(3)
             elif u.startswith('RUNOUT'):            # mock-only helper: simulate a runout pause
@@ -328,8 +397,10 @@ def main(argv=None):
     ap.add_argument('--host', default='127.0.0.1')
     ap.add_argument('--port', type=int, default=7125)
     ap.add_argument('--print-seconds', type=float, default=600, help='how long a simulated print takes')
+    ap.add_argument('--pid-seconds', type=float, default=40, help='how long a simulated PID autotune takes')
+    ap.add_argument('--no-mesh', action='store_true', help='start with no bed mesh loaded')
     a = ap.parse_args(argv)
-    pr = Printer(a.print_seconds)
+    pr = Printer(a.print_seconds, a.pid_seconds, mesh=not a.no_mesh)
 
     def ticker():
         last = time.monotonic()
