@@ -27,7 +27,7 @@ No Creality files are included. You need the official CR-M4 screen package
 | File formats (`.zbmp`, `.zico`, `13.bin`, `14.bin`, `22.bin`) | decoded; unchanged and fully re-encoded rebuilds are byte-identical to stock |
 | Splash/logo replacement, recolouring, new pages, button retargeting | implemented, **not yet tested on hardware** |
 | Browser emulator | working; rendering details approximate |
-| Moonraker bridge | core screens mapped (files, print control, temps, move, feed, tune, preheat, PID, mesh, machine page); tested against the emulator and the mock |
+| Moonraker bridge | core screens mapped (files, print control, temps, move, feed, tune, preheat, PID with its temperature graph, mesh and the mesh grid, machine page); tested against the emulator and the mock |
 
 ## Install
 
