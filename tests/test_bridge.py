@@ -2,21 +2,27 @@
 import os
 import queue
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from crm4ui import dgus
 from crm4bridge import ui
 from crm4bridge.bridge import Bridge
 from crm4bridge.config import Config
+from crm4bridge.moonraker import MoonrakerError
 
 
 class FakeLink:
     def __init__(self):
         self.sent = []
+        self.gaps = []
         self.rx = queue.Queue()
 
-    def send(self, f):
+    def send(self, f, byte_gap=0.0):
         self.sent.append(f)
+        self.gaps.append(byte_gap)
         return True
 
     def start(self):
@@ -33,6 +39,8 @@ class FakeLink:
 class FakeMoon:
     def __init__(self):
         self.calls = []
+        self.hold = None                 # threading.Event: PID_CALIBRATE blocks until it is set
+        self.fail = False                # ... and then fails
         self.status = {
             'extruder': {'temperature': 210.4, 'target': 215, 'can_extrude': True},
             'heater_bed': {'temperature': 59.6, 'target': 60},
@@ -43,6 +51,9 @@ class FakeMoon:
             'display_status': {'progress': 0},
             'filament_switch_sensor filament_sensor': {'enabled': True, 'filament_detected': True},
             'gcode_macro PRINT_START': {'per_print_mesh': 0},
+            'bed_mesh': {'profile_name': 'default', 'mesh_min': [50, 18], 'mesh_max': [420, 420],
+                         'mesh_matrix': [[0.001 * i - 0.01 * j for i in range(9)] for j in range(9)],
+                         'probed_matrix': [[]]},
         }
 
     def server_info(self):
@@ -68,6 +79,10 @@ class FakeMoon:
 
     def gcode(self, script):
         self.calls.append(('gcode', script))
+        if self.hold is not None and script.startswith('PID_CALIBRATE'):
+            self.hold.wait(5)
+            if self.fail:
+                raise MoonrakerError('pid_calibrate interrupted')
 
     def __getattr__(self, name):
         def call(*a):
@@ -293,10 +308,151 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual(w[ui.SP_FILE_ROW[1] + 3], ui.ROW_COLOR_SELECTED)
         self.assertEqual(w[ui.SP_FILE_ROW[0] + 3], ui.ROW_COLOR)
 
+    # ---- bed mesh grid ------------------------------------------------------------
+    def test_mesh_grid_after_leveling(self):
+        b = self.make()
+        self.key(b, ui.K_LEVEL, 0xF1)
+        self.assertIn(('gcode', b.cfg.mesh_gcode), self.moon.calls)
+        self.assertEqual(self.link.pages()[-2:], [ui.PAGE_LEVELING, 28])
+        w = self.link.words()
+        # 9x9 plane z = 0.001*x - 0.01*y sampled 5x5 (every second node): corners (0,0) -> 0,
+        # (8,0) -> 0.008, (0,8) -> -0.08; VP order is serpentine from the front-left
+        self.assertEqual(dgus.to_signed(w[0x7100]), 0)
+        self.assertEqual(dgus.to_signed(w[0x7108]), 8)                      # front right
+        self.assertEqual(dgus.to_signed(w[0x710A]), 8 - 20)                 # row 1 right end
+        self.assertEqual(dgus.to_signed(w[0x7112]), -20)                    # row 1 left end
+        self.assertEqual(dgus.to_signed(w[0x7128]), -80)                    # back left
+        self.assertEqual(dgus.to_signed(w[0x7130]), -72)                    # back right
+        self.assertEqual(len([vp for vp in w if 0x7100 <= vp <= 0x7130]), 25)
+
+    def test_mesh_grid_4x4_pages(self):
+        b = self.make()
+        b.cfg.mesh_grid = 4
+        self.key(b, ui.K_ADV, 7)
+        self.assertEqual(self.link.pages()[-1], 134)
+        w = self.link.words()
+        self.assertEqual(len([vp for vp in w if 0x7100 <= vp <= 0x711E]), 16)
+        self.assertEqual(dgus.to_signed(w[0x711E]), -80)                    # back left on the 4x4 layout
+        self.assertEqual(dgus.to_signed(w[0x7118]), -72)
+
+    def test_auto_leveling_data_page(self):
+        b = self.make()
+        b.set_page(ui.PAGE_ADV)
+        self.key(b, ui.K_ADV, 7)
+        self.assertEqual(self.link.pages()[-1], 135)
+        self.assertNotIn(ui.PAGE_NOT_SUPPORTED, self.link.pages())
+        self.assertEqual(self.moon.calls, [])                               # display only
+
+    def test_no_mesh_loaded(self):
+        b = self.make()
+        self.moon.status['bed_mesh'] = {'profile_name': '', 'mesh_min': [0, 0], 'mesh_max': [0, 0],
+                                        'mesh_matrix': [[]], 'probed_matrix': [[]]}
+        b.set_page(ui.PAGE_ADV)
+        self.key(b, ui.K_ADV, 7)
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_ERROR)
+        texts = {f.vp: f.payload() for f in self.link.sent if f.cmd == 0x82 and len(f.payload()) > 2}
+        self.assertTrue(texts[ui.TXT_ERROR[0]].startswith(b'No bed mesh loaded'))
+        self.assertTrue(b.popup_until)
+        b.timers(b.popup_until + 1)                                         # the popup times out
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_ADV)
+        self.assertEqual(b.popup_until, 0.0)
+        # after levelling with nothing to show, the auto-level page is restored by the timeout too
+        self.key(b, ui.K_LEVEL, 0xF1)
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_ERROR)
+        b.timers(b.popup_until + 1)
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_AUTOLEVEL)
+
+    # ---- PID graph ------------------------------------------------------------------
+    def curve_frames(self):
+        return [f for f in self.link.sent if f.vp == 0x0310]
+
+    def pending(self, b):
+        """Run jobs on a real worker thread and keep PID_CALIBRATE running until finish()."""
+        b.jobs = ThreadPoolExecutor(1)
+        self.moon.hold = threading.Event()
+
+    def finish(self, b, ok=True):
+        self.moon.fail = not ok
+        self.moon.hold.set()
+        _wait(lambda: b.curve is None)
+        b.jobs.shutdown(wait=True)
+        b.jobs = _Inline()
+        self.moon.hold, self.moon.fail = None, False
+
+    def test_pid_graph_frames(self):
+        b = self.make()
+        self.pending(b)                                                     # PID_CALIBRATE still running
+        self.key(b, ui.K_PID, 1)
+        _wait(lambda: any(c[0] == 'gcode' and 'PID_CALIBRATE' in c[1] for c in self.moon.calls))
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_PID_NOZZLE_RUN)
+        self.assertIsNotNone(b.curve)
+        clears = [f for f in self.link.sent if f.vp in (0x0301, 0x0303)]
+        self.assertEqual([f.payload() for f in clears], [b'\0\0', b'\0\0'])  # both channels cleared first
+        b.timers(10.0)
+        frames = self.curve_frames()
+        self.assertEqual(len(frames), 2)
+        self.assertEqual(frames[0].to_bytes(), bytes.fromhex('5aa50d8203105aa50100000200d200d2'))   # 210.4 -> 210
+        self.assertEqual(frames[1].to_bytes(), bytes.fromhex('5aa50d8203105aa50100010200d200d2'))   # target 210
+        self.assertEqual(self.link.gaps[-1], b.cfg.curve_byte_gap)
+        b.timers(10.5)                                                      # not yet (curve_interval)
+        self.assertEqual(len(self.curve_frames()), 2)
+        self.moon.status['extruder']['temperature'] = 213.0
+        b.poll()
+        b.timers(11.0)
+        frames = self.curve_frames()
+        self.assertEqual(len(frames), 4)
+        self.assertEqual(frames[2].payload()[6:], bytes.fromhex('00d200d5'))          # (previous, current)
+        self.finish(b)                                                      # PID_CALIBRATE done
+        self.assertIsNone(b.curve)
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_PID_NOZZLE_DONE)
+        b.timers(12.0)
+        self.assertEqual(len(self.curve_frames()), 4)                       # nothing more
+
+    def test_pid_graph_bed_channels_and_clear_on_save(self):
+        b = self.make()
+        self.pending(b)
+        self.key(b, ui.K_PID, 3)
+        b.timers(10.0)
+        self.assertEqual([f.to_bytes()[10] for f in self.curve_frames()], [2, 3])
+        self.assertEqual(self.curve_frames()[0].payload()[6:], bytes.fromhex('003c003c'))     # 59.6 -> 60
+        self.finish(b)
+        self.link.sent.clear()
+        self.key(b, ui.K_PID, 4)                                            # Yes: SAVE_CONFIG
+        self.assertEqual([f.vp for f in self.link.sent if f.vp in (0x0305, 0x0307)], [0x0305, 0x0307])
+
+    def test_pid_graph_stops_on_page_change_and_error(self):
+        b = self.make()
+        self.pending(b)
+        self.key(b, ui.K_PID, 1)
+        self.key(b, ui.VP_CUR_PAGE, ui.PAGE_MAIN)                          # the screen went elsewhere
+        self.assertIsNone(b.curve)
+        self.finish(b)
+        self.pending(b)
+        self.key(b, ui.K_PID, 1)
+        self.assertIsNotNone(b.curve)
+        self.finish(b, ok=False)                                            # PID_CALIBRATE failed
+        self.assertIsNone(b.curve)
+        _wait(lambda: self.link.pages()[-1] == ui.PAGE_ERROR)
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_ERROR)
+
+    def test_dry_run_pid_graph(self):
+        b = self.make(dry_run=True)
+        self.key(b, ui.K_PID, 1)                                            # nothing sent; done at once
+        self.assertEqual(self.moon.calls, [])
+        self.assertIsNone(b.curve)
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_PID_NOZZLE_DONE)
+
 
 class _Inline:
     def submit(self, fn):
         fn()
+
+
+def _wait(cond, timeout=3.0):
+    end = time.monotonic() + timeout
+    while not cond() and time.monotonic() < end:
+        time.sleep(0.01)
+    return cond()
 
 
 if __name__ == '__main__':

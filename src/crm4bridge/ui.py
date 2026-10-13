@@ -41,6 +41,7 @@ PAGE_FILE_PREVIEW = 119
 PAGE_SETTINGS_2 = 121
 PAGE_PID_NOZZLE, PAGE_PID_NOZZLE_RUN, PAGE_PID_NOZZLE_DONE = 122, 123, 124
 PAGE_PID_BED, PAGE_PID_BED_RUN, PAGE_PID_BED_DONE = 125, 126, 127
+PAGE_PID_RUN = {PAGE_PID_NOZZLE_RUN, PAGE_PID_BED_RUN}      # the temperature graph is fed on these
 PAGE_MACHINE = 45                  # custom page from examples/machine_page
 PAGE_HOST_SHUTDOWN, PAGE_HOST_REBOOT = 53, 54
 
@@ -62,6 +63,8 @@ VP_REMAIN_H, VP_REMAIN_M = 0x7058, 0x705A
 VP_POS_X, VP_POS_Y, VP_POS_Z = 0x705C, 0x705E, 0x7060    # x10
 VP_FEED_LEN, VP_RETRACT_LEN = 0x7062, 0x7064             # x10 mm
 VP_LEVEL_PROGRESS = 0x7066
+VP_MESH = 0x7100                   # mesh grid, mm x1000 signed, VP_MESH + 2*i serpentine (crm4bridge.mesh)
+MESH_PAGES = {5: (28, 135), 4: (27, 134)}   # grid size -> (page after levelling, "auto leveling data" page)
 VP_PID_NOZZLE_TEMP, VP_PID_NOZZLE_CYCLES = 0x7070, 0x7072
 VP_PID_BED_TEMP, VP_PID_BED_CYCLES = 0x7074, 0x7076
 VP_PID = {'extruder': (0x7000, 0x7002, 0x7004), 'heater_bed': (0x7006, 0x7008, 0x700A)}   # x100; 0x7006/0x700A 32-bit
@@ -121,7 +124,7 @@ K_HOME = 0x4046        # 0..2 step pages, 3 X, 4 Y, 5 all axes, 6 X+Y (stock V2.
 K_EXTRUDE = 0x4056     # 1 retract, 2 feed, 5 need-heat yes, 6 need-heat no
 K_FILES = 0x40D2       # 0 back, 1 start (preview), 9 preview back, paging keys handled by the screen
 K_FILE_ROW = 0x40D3    # 1..24
-K_ADV = 0x4104         # 4 steps/mm, 7 auto-leveling data page, 8 toggle 0x4228, 9 CR-touch, 0 back
+K_ADV = 0x4104         # 4 steps/mm, 7 auto-leveling data page (mesh grid, page 135), 8 toggle 0x4228, 9 CR-touch, 0 back
 K_ADV2 = 0x4105        # 1/2 mesh points, 3..5 CR-touch, 6 volume, 8 home offsets, 9 more preheat
 K_PID_NAV = 0x401F
 K_PID = 0x410F         # 1 start nozzle, 3 start bed, 2/4 yes (save), 5/6 back
@@ -157,7 +160,7 @@ VP_FAN_PCT = 0x9070
 PAGE_TUNE, PAGE_TUNE2, PAGE_ADV = 21, 121, 132
 NOT_SUPPORTED_RETURN = {
     (K_ADV, 4): PAGE_TUNE,                                   # Steps-per-mm tile (stock UI)
-    (K_ADV, 7): PAGE_ADV, (K_ADV, 8): PAGE_ADV, (K_ADV, 9): PAGE_ADV,
+    (K_ADV, 8): PAGE_ADV, (K_ADV, 9): PAGE_ADV,              # 7 (auto leveling data) shows the mesh grid
     (K_ADV2, 1): PAGE_ADV, (K_ADV2, 2): PAGE_ADV,            # mesh points (133)
     (K_ADV2, 3): PAGE_ADV, (K_ADV2, 4): PAGE_ADV, (K_ADV2, 5): PAGE_ADV,   # CR-Touch test (136)
     (K_ADV2, 8): PAGE_ADV,
@@ -183,6 +186,7 @@ MASCOT_SHOWN, MASCOT_HIDDEN = 4, 0
 
 # ---- screen system VPs (screen firmware RE, stage 2) ---------------------------------------------
 VP_CUR_PAGE = 0x0014               # read: current page (refreshed by the screen on each read)
+# curve buffers (PID graph): see crm4bridge.curve for the 0x0310 write and the 0x0301+2n length registers
 VP_BACKLIGHT = 0x0082              # hi = brightness 0-100, lo = standby brightness 0-100
 VP_STANDBY_TIME = 0x0083           # standby delay in 10 ms units
 SYS_CONFIG_BASE = 0x60             # VP 0x0081 bits used: 3 = touch beep, 2 = backlight auto-standby

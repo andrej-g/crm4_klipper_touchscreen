@@ -30,14 +30,24 @@ class ScreenLink:
     def start(self):
         threading.Thread(target=self._run, name='screen-link', daemon=True).start()
 
-    def send(self, frame: dgus.Frame):
+    def send(self, frame: dgus.Frame, byte_gap=0.0):
+        """Send one frame. ``byte_gap`` > 0 writes the bytes one at a time with that
+        many seconds between them (serial links only: the stock mainboard spaces the
+        bytes of its curve-buffer writes ~800 us apart; see crm4bridge.curve). On TCP
+        the kernel coalesces writes anyway, so the frame goes out as a whole."""
         data = frame.to_bytes()
         with self._lock:
             io = self._io
             if io is None:
                 return False
             try:
-                io['write'](data)
+                if byte_gap > 0 and io.get('paced'):
+                    for i in range(len(data)):
+                        io['write'](data[i:i + 1])
+                        io['flush']()
+                        time.sleep(byte_gap)
+                else:
+                    io['write'](data)
                 self.tx_bytes += len(data)
                 return True
             except OSError as e:
@@ -53,12 +63,13 @@ class ScreenLink:
             s = socket.create_connection((host or '127.0.0.1', int(port)), timeout=5)
             s.settimeout(None)
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            return {'write': s.sendall, 'read': lambda: s.recv(4096), 'close': s.close}
+            return {'write': s.sendall, 'read': lambda: s.recv(4096), 'close': s.close, 'paced': False}
         if kind == 'serial':
             import serial
             port, _, baud = arg.partition('@')
             ser = serial.Serial(port, int(baud or 115200), timeout=0.1)
-            return {'write': ser.write, 'read': lambda: ser.read(256) or _EMPTY_OK, 'close': ser.close}
+            return {'write': ser.write, 'read': lambda: ser.read(256) or _EMPTY_OK, 'close': ser.close,
+                    'flush': ser.flush, 'paced': True}
         raise ValueError(f'bad screen spec {self.spec!r} (use serial:PORT[@baud] or tcp:HOST:PORT)')
 
     def _run(self):

@@ -32,6 +32,9 @@ DEFAULTS = {
     'standby_timeout': '',
     'spoolman': 'true',
     'spoolman_interval': '10',
+    'mesh_grid': '5',
+    'curve_interval': '1.0',
+    'curve_byte_gap': '0.0008',
 }
 
 DEFAULT_PRESETS = {'PLA': (200, 60), 'ABS': (240, 100), 'PETG': (235, 75), 'TPU': (225, 50),
@@ -77,6 +80,11 @@ class Config:
         self.standby_timeout = opt('standby_timeout')
         self.spoolman = b.getboolean('spoolman')
         self.spoolman_interval = b.getfloat('spoolman_interval')
+        self.mesh_grid = b.getint('mesh_grid')                  # 5 (pages 28/135) or 4 (27/134)
+        if self.mesh_grid not in (4, 5):
+            raise ValueError('mesh_grid must be 4 or 5')
+        self.curve_interval = b.getfloat('curve_interval')      # s between PID graph points
+        self.curve_byte_gap = b.getfloat('curve_byte_gap')      # s between the bytes of a curve write, 0 = off
         self.presets = dict(DEFAULT_PRESETS)
         if cp.has_section('presets'):
             canon = {k.lower(): k for k in DEFAULT_PRESETS}

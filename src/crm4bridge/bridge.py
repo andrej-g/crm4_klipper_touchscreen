@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from crm4ui import dgus
 
-from . import spoolman, thumbnail, ui
+from . import curve, mesh, spoolman, thumbnail, ui
 from .config import State
 from .link import ScreenLink
 from .moonraker import Moonraker, MoonrakerError, tasmota_delayed_off
@@ -20,6 +20,7 @@ from .moonraker import Moonraker, MoonrakerError, tasmota_delayed_off
 log = logging.getLogger('crm4bridge')
 
 REPAINT_EVERY = 30.0      # s: full repaint in case the screen rebooted
+POPUP_SECONDS = 3.0       # s: how long a bridge-timed message (error page without a button) stays
 
 
 def _hm(seconds):
@@ -63,6 +64,9 @@ class Bridge:
         self.thumb_file = None           # file whose picture is in the screen's 0xC000 buffer
         self.thumb_ok = False            # ... and whether it had a thumbnail at all
         self.thumb_want = None
+        self.curve = None                # crm4bridge.curve.CurveStream while a PID autotune runs
+        self.next_curve = 0.0
+        self.popup_until = 0.0           # monotonic time at which a timed popup goes away
         self.stop = threading.Event()
         self._repaint = threading.Event()
         macro, _, var = cfg.autolevel_variable.partition(':')
@@ -70,8 +74,11 @@ class Bridge:
         self.sensor_obj = f'filament_switch_sensor {cfg.filament_sensor}' if cfg.filament_sensor else None
 
     # ======================================================================== screen I/O
-    def _send(self, frame):
-        self.link.send(frame)
+    def _send(self, frame, byte_gap=0.0):
+        if byte_gap > 0:
+            self.link.send(frame, byte_gap=byte_gap)
+        else:
+            self.link.send(frame)
 
     def _write(self, vp, payload: bytes, force=False):
         with self.cache_lock:
@@ -94,6 +101,7 @@ class Bridge:
         self.page = page
         log.debug('page %s %s', page, why)
         self._sync_mascot(page)
+        self._curve_page(page)
         self._send(dgus.set_page(page))
 
     def _screen_page(self, page):
@@ -106,6 +114,7 @@ class Bridge:
         if page not in (ui.PAGE_NOT_SUPPORTED, ui.PAGE_ERROR):
             self.page_before_popup = page
         self._sync_mascot(page)
+        self._curve_page(page)
 
     def request_page(self):
         self._send(dgus.read_words(ui.VP_CUR_PAGE, 1))
@@ -245,6 +254,24 @@ class Bridge:
                 self.poll()
                 self.request_page()
                 next_poll = now + self.cfg.poll_interval
+            self.timers(now)
+
+    def timers(self, now):
+        """Per-loop bookkeeping: the PID graph point every curve_interval, timed popups."""
+        if self.curve and now >= self.next_curve:
+            self.next_curve = now + self.cfg.curve_interval
+            self.push_curve()
+        if self.popup_until and now >= self.popup_until:
+            self.popup_until = 0.0
+            self.set_page(self.page_before_popup or ui.PAGE_MAIN, 'popup timeout')
+
+    def _timed_message(self, message, back, why):
+        """The error page (109) has no button: show ``message`` there for POPUP_SECONDS,
+        then return to ``back``."""
+        self.text(ui.TXT_ERROR, message[:ui.TXT_ERROR[1]])
+        self.page_before_popup = back
+        self.popup_until = time.monotonic() + POPUP_SECONDS
+        self.set_page(ui.PAGE_ERROR, why)
 
     # ======================================================================== state -> screen
     def push_static(self):
@@ -677,8 +704,47 @@ class Bridge:
     def k_level(self, k):
         if k == 0xF1:
             self.set_page(ui.PAGE_LEVELING, 'leveling')
-            self._gcode(self.cfg.mesh_gcode, 'bed mesh',
-                        then=lambda ok: self.set_page(ui.PAGE_AUTOLEVEL, 'leveling done'))
+
+            def done(ok):
+                # as stock: the grid (page 28) after levelling, or a timed "No bed mesh
+                # loaded" that returns to the auto-level page. A failed mesh_gcode has
+                # already put its error on page 109; leave that where it is.
+                if ok:
+                    self.show_mesh(ui.MESH_PAGES[self.cfg.mesh_grid][0], ui.PAGE_AUTOLEVEL)
+            self._gcode(self.cfg.mesh_gcode, 'bed mesh', then=done)
+
+    # ---- bed mesh grid (pages 28/135, crm4bridge.mesh) ---------------------------
+    def fetch_mesh(self):
+        """The loaded bed mesh as an n x n grid (row 0 = front), or None."""
+        try:
+            st = self.moon.query({'bed_mesh': ['profile_name', 'mesh_min', 'mesh_max',
+                                               'mesh_matrix', 'probed_matrix']}).get('bed_mesh') or {}
+        except MoonrakerError as e:
+            log.warning('bed_mesh query failed: %s', e)
+            return None
+        try:
+            grid = mesh.grid_from_status(st, self.cfg.mesh_grid)
+        except (ValueError, TypeError, IndexError) as e:
+            log.warning('bed_mesh status unusable: %s', e)
+            return None
+        if grid is None:
+            log.info('no bed mesh loaded')
+        return grid
+
+    def push_mesh(self, grid):
+        for vp, value in mesh.words(grid, ui.VP_MESH):
+            self.word(vp, value)
+
+    def show_mesh(self, page, back):
+        """Write the current mesh to the grid VPs and show ``page``. Without a mesh,
+        a timed "No bed mesh loaded" on the error page, back to ``back``."""
+        grid = self.fetch_mesh()
+        if grid is None:
+            self._timed_message('No bed mesh loaded', back, 'no mesh')
+            return False
+        self.push_mesh(grid)
+        self.set_page(page, 'mesh grid')
+        return True
 
     def k_home(self, k):
         axes = {3: 'X', 4: 'Y', 5: '', 6: 'X Y'}             # stock V2.0.3: 5 = all, 6 = X+Y
@@ -727,7 +793,9 @@ class Bridge:
             self.word(sp + 3, ui.ROW_COLOR_SELECTED if i == sel else ui.ROW_COLOR)
 
     def k_adv(self, k):
-        if k in (4, 7, 8, 9):              # 4 steps-per-mm, 9 CR-Touch testing
+        if k == 7:                         # "auto leveling data": the mesh grid
+            self.show_mesh(ui.MESH_PAGES[self.cfg.mesh_grid][1], ui.PAGE_ADV)
+        elif k in (4, 8, 9):               # 4 steps-per-mm, 8 improved accuracy, 9 CR-Touch testing
             self._not_supported()
 
     def k_adv2(self, k):
@@ -747,15 +815,57 @@ class Bridge:
             run, done = ((ui.PAGE_PID_NOZZLE_RUN, ui.PAGE_PID_NOZZLE_DONE) if k == 1
                          else (ui.PAGE_PID_BED_RUN, ui.PAGE_PID_BED_DONE))
             self.set_page(run, 'pid')
-            self._gcode(f'PID_CALIBRATE HEATER={heater} TARGET={target}',
-                        then=lambda ok: self.set_page(done if ok else ui.PAGE_ERROR, 'pid done'))
+            self.curve_start(heater, target)
+
+            def finished(ok):
+                self.curve_stop()
+                self.set_page(done if ok else ui.PAGE_ERROR, 'pid done')
+            self._gcode(f'PID_CALIBRATE HEATER={heater} TARGET={target}', then=finished)
         elif k in (2, 4):
             self._gcode('SAVE_CONFIG', 'SAVE_CONFIG (Klipper restarts)')
+            self.curve_clear('extruder' if k == 2 else 'heater_bed')
             self.set_page(ui.PAGE_PID_NOZZLE if k == 2 else ui.PAGE_PID_BED, 'pid saved')
         elif k in (5, 6):
             # stock returns to the manual PID page (114); that page is unsupported here,
             # so back to the autotune page of the same heater
+            self.curve_clear('extruder' if k == 5 else 'heater_bed')
             self.set_page(ui.PAGE_PID_NOZZLE if k == 5 else ui.PAGE_PID_BED, 'pid discarded')
+
+    # ---- PID temperature graph (crm4bridge.curve) ----------------------------------
+    def curve_start(self, heater, target):
+        """Clear the heater's two curve channels and start feeding them (timers())."""
+        self.curve = curve.CurveStream(heater, target)
+        for f in self.curve.clear_frames():
+            self._send(f)
+        self.next_curve = 0.0
+        log.info('PID graph: %s channels %s/%s', heater, self.curve.ch_temp, self.curve.ch_target)
+
+    def curve_stop(self):
+        if self.curve:
+            log.info('PID graph stopped')
+        self.curve = None
+
+    def curve_clear(self, heater):
+        """Empty the heater's channels on the screen (stock does this on PID save / abort)."""
+        for ch in curve.CHANNELS[heater]:
+            self._send(curve.clear_frame(ch))
+
+    def push_curve(self):
+        """One graph point per channel from the last polled status: (previous, current)
+        temperature and the autotune target, as the stock firmware sends them."""
+        c = self.curve
+        if c is None:
+            return
+        temp = self.status.get(c.heater, {}).get('temperature')
+        if temp is None:
+            return
+        for f in c.frames(temp):
+            self._send(f, byte_gap=self.cfg.curve_byte_gap)
+
+    def _curve_page(self, page):
+        if self.curve and page not in ui.PAGE_PID_RUN:
+            log.info('PID graph stopped: page %s', page)
+            self.curve = None
 
     def k_language(self, k):
         # The language is fixed by the config (English by default); the klipper_ui build
