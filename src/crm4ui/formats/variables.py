@@ -17,6 +17,14 @@ Record (32 bytes, big-endian fields)::
 
 Known types: 0x00 icon variable, 0x10 number, 0x11 text, 0x20 trend curve,
 0x08 / 0x26 image area (print thumbnail). Unknown bytes are kept verbatim.
+
+Trend curve (0x20) fields beyond the colour and channel follow the DGUS-II
+"real-time curve" layout (inferred, consistent with the stock PID pages: the
+nozzle graph's 0-350 C axis is 208 px tall and its record says Mul_Y 153/256
+with VD_Central 175 at Y_Central 387; the bed graph has 70 / 380/256 for
+0-140 C): ``[16:18]`` Y_Central, ``[18:20]`` VD_Central, ``[20:22]`` colour,
+``[22:24]`` Mul_Y (pixels per unit, /256), ``[24]`` channel, ``[25]`` Dis_HOR
+(pixels between points).
 """
 import struct
 
@@ -108,7 +116,9 @@ class VarRecord:
                      icon_lib=x[20])
         elif self.type == 0x20:
             d.update(box=self.box, y_center=struct.unpack('>H', x[16:18])[0],
-                     color=f'0x{self.color:04X}', channel=x[24])
+                     vd_central=struct.unpack('>h', x[18:20])[0],            # inferred, see module doc
+                     color=f'0x{self.color:04X}', mul_y=struct.unpack('>H', x[22:24])[0],
+                     channel=x[24], dis_hor=x[25])
         elif self.type == 0x26:
             d.update(box=self.box)
         return d

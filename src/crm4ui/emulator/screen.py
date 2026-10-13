@@ -18,6 +18,12 @@ from .. import dgus
 
 KEYBOARD_BACKSPACE, KEYBOARD_ESC, KEYBOARD_OK = 0xF2, 0xF0, 0xF1
 
+# curve buffers (screen firmware RE, section 2a): 8 rings of 0x800 words; VP 0x0300 + 2n is
+# channel n's write pointer, 0x0301 + 2n its length (0 clears); VP 0x0310 = 5AA5, 0x0311 hi =
+# block count, then per block a word (channel << 8 | n) and n data words
+CURVE_CHANNELS, CURVE_RING = 8, 0x800
+VP_CURVE_REG, VP_CURVE_WRITE, CURVE_MAGIC = 0x0300, 0x0310, 0x5AA5
+
 
 class ScreenSim:
     def __init__(self, project, start_page=0, lang=None, ack_writes=False, font_path=None):
@@ -38,6 +44,7 @@ class ScreenSim:
         self.font_path = font_path or os.path.join(project.root, 'truefont', 'font.ttf')
         self._font_bytes = None
         self._pictures = {}
+        self.curves = [collections.deque(maxlen=CURVE_RING) for _ in range(CURVE_CHANNELS)]
         self._seed_sp()
         if lang is not None:
             self.set_word(0x5247, lang)
@@ -69,6 +76,7 @@ class ScreenSim:
             self.set_word(0x5247, lang)
             self.page, self.keypad = 0, None
             self._bg, self._fonts, self._pictures = {}, {}, {}
+            self.curves = [collections.deque(maxlen=CURVE_RING) for _ in range(CURVE_CHANNELS)]
             self.font_path = os.path.join(project.root, 'truefont', 'font.ttf')
             self._font_bytes = None
             self._seed_sp()
@@ -128,6 +136,7 @@ class ScreenSim:
                     o = 2 * vp
                     self.mem[o:o + len(payload)] = payload
                     note = f'write 0x{vp:04X} ({len(payload)} B)'
+                    note = self._curve_host_write(vp, payload) or note
                 self._note('host->scr', frame, note)
                 if self.ack_writes:
                     self._emit(dgus.ACK, 'ack')
@@ -141,6 +150,31 @@ class ScreenSim:
             else:
                 self._note('host->scr', frame, 'ignored')
                 self._bump()
+
+    def _curve_host_write(self, vp, payload):
+        """Curve-buffer writes (VP 0x0310) and channel clears (VP 0x0301 + 2n <- 0)."""
+        if vp == VP_CURVE_WRITE:
+            n = len(payload) // 2
+            words = list(struct.unpack(f'>{n}H', payload[:2 * n]))
+            if len(words) < 3 or words[0] != CURVE_MAGIC:
+                return 'curve write: bad magic, ignored'
+            pos, added = 2, []
+            for _ in range(words[1] >> 8):
+                if pos >= len(words):
+                    break
+                ch, cnt = words[pos] >> 8, words[pos] & 0xFF
+                vals = words[pos + 1:pos + 1 + cnt]
+                pos += 1 + cnt
+                if ch < CURVE_CHANNELS:
+                    self.curves[ch].extend(dgus.to_signed(v) for v in vals)
+                    added.append(f'ch{ch}+{len(vals)}')
+            return 'curve ' + ' '.join(added) if added else 'curve write: nothing'
+        if VP_CURVE_REG < vp < VP_CURVE_REG + 2 * CURVE_CHANNELS and (vp - VP_CURVE_REG) % 2 == 1:
+            ch = (vp - VP_CURVE_REG) // 2
+            if payload[:2] == b'\x00\x00':
+                self.curves[ch].clear()
+                return f'curve ch{ch} cleared'
+        return None
 
     # ---- touch ------------------------------------------------------------------------
     def touch(self, x, y):
@@ -306,6 +340,8 @@ class ScreenSim:
             img = self._picture(r.vp)
             if img is not None:
                 im.paste(img, tuple(r.pos))
+        elif r.type == 0x20:                                    # trend curve from a ring buffer
+            self._draw_curve(dr, r)
         elif r.type == 0x26:                                    # dim area: blend toward black by VP value
             b = r.box
             x0, y0, x1, y1 = min(b[0], b[2]), min(b[1], b[3]), max(b[0], b[2]), max(b[1], b[3])
@@ -313,6 +349,23 @@ class ScreenSim:
             if alpha and x1 > x0 and y1 > y0:
                 region = im.crop((x0, y0, x1, y1))
                 im.paste(Image.blend(region, Image.new('RGB', region.size, (0, 0, 0)), alpha / 255), (x0, y0))
+
+    def _draw_curve(self, dr, r):
+        """Polyline of the channel's newest points. ASSUMPTION: points are Dis_HOR pixels
+        apart from the left edge and the view scrolls once the area is full (DGUS-II
+        real-time curve); y = Y_Central - (value - VD_Central) * Mul_Y / 256."""
+        d = r.describe()
+        pts = list(self.curves[d['channel']]) if d['channel'] < CURVE_CHANNELS else []
+        if len(pts) < 2:
+            return
+        b = d['box']
+        x0, y0, x1, y1 = min(b[0], b[2]), min(b[1], b[3]), max(b[0], b[2]), max(b[1], b[3])
+        step = max(1, d['dis_hor'])
+        pts = pts[-((x1 - x0) // step + 1):]
+        scale = d['mul_y'] / 256.0
+        xy = [(x0 + i * step, max(y0, min(y1, round(d['y_center'] - (v - d['vd_central']) * scale))))
+              for i, v in enumerate(pts)]
+        dr.line(xy, fill=_rgb(r.color), width=2)
 
 
 def _rgb(c):

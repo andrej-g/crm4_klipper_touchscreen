@@ -85,6 +85,58 @@ class EmulatorTest(unittest.TestCase):
         s.touch(240, 200)                             # Z up
         self.assertEqual(self.sent[-1].vp, 0x7050)
 
+    def test_mesh_grid_pages(self):
+        from crm4bridge import mesh, ui
+        for grid, (page_done, page_data) in ui.MESH_PAGES.items():
+            fields = {r.vp: r for r in self.project.vars.pages[page_data] if r.type == 0x10 and r.vp >= 0x7100}
+            self.assertEqual(len(fields), grid * grid, page_data)
+            self.assertEqual(set(fields), {ui.VP_MESH + 2 * i for i in range(grid * grid)})
+            self.assertTrue(all(r.digits == (2, 3) and r.data[19] == 0 for r in fields.values()))   # 2.3 digits, int16
+            # the UI lays the VPs out serpentine from the bottom left, as crm4bridge.mesh assumes
+            rows = []                                                 # distinct y positions (one field sits 2 px off)
+            for y in sorted({r.pos[1] for r in fields.values()}, reverse=True):
+                if not rows or rows[-1] - y > 10:
+                    rows.append(y)
+            self.assertEqual(len(rows), grid)
+            for rnum, y in enumerate(rows):
+                cols = sorted((r.pos[0], r.vp) for r in fields.values() if abs(r.pos[1] - y) <= 10)
+                vps = [vp for _, vp in cols]
+                expect = [ui.VP_MESH + 2 * (rnum * grid + (c if rnum % 2 == 0 else grid - 1 - c)) for c in range(grid)]
+                self.assertEqual(vps, expect, (page_data, rnum))
+            s = self.sim(page_done)
+            for vp, v in mesh.words([[0.001 * (i - j) for i in range(grid)] for j in range(grid)], ui.VP_MESH):
+                s.handle_host(dgus.write_words(vp, v))
+            self.assertEqual(dgus.to_signed(s.word(ui.VP_MESH + 2)), 1)
+            s.render()
+
+    def test_curve_buffers_and_pid_page(self):
+        from crm4bridge import curve
+        s = self.sim(123)
+        curves = [r for r in self.project.vars.pages[123] if r.type == 0x20]
+        self.assertEqual(sorted(r.describe()['channel'] for r in curves), [0, 1])
+        d = curves[0].describe()
+        self.assertEqual((d['y_center'], d['vd_central'], d['mul_y'], d['dis_hor']), (387, 175, 153, 1))
+        s.handle_host(curve.clear_frame(0))
+        for i in range(60):
+            for f in curve.CurveStream('extruder', 200).frames(100 + i * 2):
+                s.handle_host(f)
+        self.assertEqual(len(s.curves[0]), 120)                                   # two points per frame
+        self.assertEqual(list(s.curves[0])[:3], [100, 100, 102])
+        self.assertEqual(len(s.curves[1]), 120)
+        before = s.render().copy()
+        s.handle_host(curve.clear_frame(0))
+        self.assertEqual(len(s.curves[0]), 0)
+        after = s.render()
+        # the current-value trace (yellow 0xFFE0) was drawn inside the graph box before, not after
+        box = (d['box'][0], d['box'][1], d['box'][2], d['box'][3])
+        def yellow(im):
+            raw = im.crop(box).convert('RGB').tobytes()
+            return sum(1 for r, g, b in zip(raw[0::3], raw[1::3], raw[2::3]) if r > 200 and g > 200 and b < 60)
+        self.assertGreater(yellow(before), 50)
+        self.assertLess(yellow(after), yellow(before))
+        s.handle_host(dgus.write_words(0x0310, 0x1234, 0x0100, 0x0001, 5))        # bad magic: ignored
+        self.assertEqual(len(s.curves[0]), 0)
+
 
 if __name__ == '__main__':
     unittest.main()
