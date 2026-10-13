@@ -93,7 +93,10 @@ Keep the untouched stock `private/` + `firmware.zlib` on a separate SD card; re-
    crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --dry-run          # list what would be sent
    crm4ui flash build/klipper --port serial:/dev/ttyAMA0                    # everything (~15 min at 115200)
    crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --changed-from build/klipper.prev   # only what changed
+   crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --baud 921600      # faster data phase (untested)
    ```
+
+   `--baud` (230400, 460800, 921600) puts that speed in each `$file` command; the screen switches to it for that file's packets and back to 115200 afterwards. The commands themselves always run at 115200. If it fails, run again without `--baud`.
 
    About 10 KiB/s. From the screen firmware: each file is overwritten as a whole, nothing else is touched or deleted, and order does not matter, so a failed or partial update can simply be re-run. Not yet tried on the real screen. The emulator accepts it too (`--port tcp:127.0.0.1:7901`): received files land in `<private>.ota` and it reboots into them.
 3. **Front USB port**, through Creality's mainboard bootloader (`STM32F4_UPDATE/private` on a USB stick). Untested under Klipper.

@@ -101,6 +101,23 @@ class SenderTest(unittest.TestCase):
         self.assertEqual(screen.rx.bad_packets, 1)
         self.assertFalse(screen.rx.active)
 
+    def test_fast_baud_per_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            _write(os.path.join(d, 'config.txt'), os.urandom(3000))
+            a, b = socket.socketpair()
+            screen = FakeScreen(b)
+            screen.start()
+            port = ota.Port.from_socket(a)
+            speeds = []
+            port.set_baud = speeds.append
+            ota.Sender(port, log=lambda *x: None, pause=0.01, baud=921600).run(ota.plan(d))
+            a.close()
+        self.assertEqual(screen.rx.bauds, [921600])
+        self.assertEqual(speeds, [921600, 115200])           # up for the packets, back after
+        self.assertEqual(len(screen.files), 1)
+        with self.assertRaises(ValueError):
+            ota.Sender(None, baud=12345)
+
     def test_no_answer(self):
         a, b = socket.socketpair()
         sender = ota.Sender(ota.Port.from_socket(a), log=lambda *x: None, pause=0.01, cmd_timeout=0.05)

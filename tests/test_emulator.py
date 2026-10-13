@@ -31,6 +31,22 @@ class EmulatorTest(unittest.TestCase):
         self.assertEqual(self.sent[-1], dgus.reply_words(0x0014, 1))   # current page
         s.render()                                    # must not raise
 
+    def test_description_pointer_and_dim(self):
+        s = self.sim(11)                              # printing page: thumbnail dim field
+        dims = [r for r in self.project.vars.pages[11] if r.type == 0x26]
+        self.assertTrue(dims)
+        sp = int.from_bytes(dims[0].data[2:4], 'big')
+        self.assertEqual(s.word(sp + 1), int.from_bytes(dims[0].data[8:10], 'big'))   # seeded from 14.bin
+        img = s.render()
+        before = img.getpixel((238, 300))
+        s.handle_host(dgus.write_words(0x8800, 0xFF))
+        for i, v in enumerate((88, 264, 388, 564), 1):
+            s.handle_host(dgus.write_words(sp + i, v))
+        after = s.render().getpixel((238, 300))
+        self.assertLessEqual(sum(after[:3]), sum(before[:3]))
+        s.handle_host(dgus.write_words(sp + 1, 0xFFFF))  # >= FF00 hides the field
+        s.render()
+
     def test_return_key(self):
         s = self.sim(1)
         s.touch(240, 610)                             # "+ File"

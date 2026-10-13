@@ -38,8 +38,26 @@ class ScreenSim:
         self.font_path = font_path or os.path.join(project.root, 'truefont', 'font.ttf')
         self._font_bytes = None
         self._pictures = {}
+        self._seed_sp()
         if lang is not None:
             self.set_word(0x5247, lang)
+
+    def _seed_sp(self):
+        """At boot the screen copies each field's description to VP RAM at its SP."""
+        for _, r in self.project.vars.all():
+            sp, n = struct.unpack('>HH', bytes(r.data[2:6]))
+            if sp < 0xFF00 and 1 <= n <= 16:
+                self.mem[2 * sp:2 * sp + 2 * n] = r.data[6:6 + 2 * n]
+
+    def _live(self, r):
+        """The field as the screen draws it: description words reloaded from VP RAM at SP."""
+        sp, n = struct.unpack('>HH', bytes(r.data[2:6]))
+        if sp >= 0xFF00 or not 1 <= n <= 16:
+            return r
+        from ..formats.variables import VarRecord
+        data = bytearray(r.data)
+        data[6:6 + 2 * n] = self.mem[2 * sp:2 * sp + 2 * n]
+        return VarRecord(bytes(data))
 
     def reload(self, project):
         """Restart with a new UI project, as the screen does after an OTA update."""
@@ -53,6 +71,7 @@ class ScreenSim:
             self._bg, self._fonts, self._pictures = {}, {}, {}
             self.font_path = os.path.join(project.root, 'truefont', 'font.ttf')
             self._font_bytes = None
+            self._seed_sp()
             self._note('local', None, f'rebooted with {project.root}')
             self._bump()
 
@@ -229,6 +248,9 @@ class ScreenSim:
             im = self._background(page).copy()
             dr = ImageDraw.Draw(im)
             for r in self.project.vars.pages.get(page, []):
+                r = self._live(r)
+                if r.vp >= 0xFF00:                          # hidden through its SP
+                    continue
                 self._draw_var(im, dr, r)
             if self.keypad and page == self.keypad['page']:
                 kp = self.keypad                                  # input box (page 40 and copies): 20,128..459,295
@@ -284,9 +306,13 @@ class ScreenSim:
             img = self._picture(r.vp)
             if img is not None:
                 im.paste(img, tuple(r.pos))
-        elif r.type == 0x26:                                    # thumbnail area: placeholder
+        elif r.type == 0x26:                                    # dim area: blend toward black by VP value
             b = r.box
-            dr.rectangle([b[0], b[1], b[2], b[3]], outline=(90, 90, 90))
+            x0, y0, x1, y1 = min(b[0], b[2]), min(b[1], b[3]), max(b[0], b[2]), max(b[1], b[3])
+            alpha = min(255, self.word(r.vp))
+            if alpha and x1 > x0 and y1 > y0:
+                region = im.crop((x0, y0, x1, y1))
+                im.paste(Image.blend(region, Image.new('RGB', region.size, (0, 0, 0)), alpha / 255), (x0, y0))
 
 
 def _rgb(c):

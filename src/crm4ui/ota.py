@@ -22,7 +22,10 @@ the root of ``private/`` (``config.txt``), then ``bin``, ``icon``, ``image``,
 
 From the screen firmware (stage 2): files are opened create-always, nothing is
 deleted, order does not matter, a duplicate packet is re-acked, 300 ms without
-data ends a transfer. Still untested on the real screen: keep the stock files on SD.
+data ends a transfer. The baud field of ``$file`` switches the screen to that speed
+for the packets of that file only (``$ok#`` still comes at 115200; back to 115200
+after the file). ``Sender(baud=...)`` uses this. Still untested on the real screen:
+keep the stock files on SD.
 """
 import os
 import socket
@@ -33,6 +36,8 @@ PKT_SIZE = PKT_DATA + 4
 DIRS = (('', ''), ('bin', '\\bin'), ('icon', '\\icon'), ('image', '\\image'), ('truefont', '\\truefont'))
 EXTS = ('.txt', '.bin', '.zico', '.zbmp', '.ttf', '.ini')
 OK = b'$ok#'
+BASE_BAUD = 115200
+BAUDS = (115200, 230400, 460800, 921600)
 
 
 class OtaError(Exception):
@@ -94,8 +99,9 @@ class Port:
         if kind == 'serial':
             import serial
             dev, _, baud = arg.partition('@')
-            self._ser = serial.Serial(dev, int(baud or 115200), timeout=0)
+            self._ser = serial.Serial(dev, int(baud or BASE_BAUD), timeout=0)
             self.write = self._ser.write
+            self.set_baud = self._set_serial_baud
             self._read = lambda: self._ser.read(4096)
             self.close = self._ser.close
         elif kind == 'tcp':
@@ -107,6 +113,13 @@ class Port:
             self.close = self._sock.close
         else:
             raise ValueError(f'bad port {spec!r} (serial:PORT[@baud] or tcp:HOST:PORT)')
+
+    def set_baud(self, baud):
+        """Change the line speed (no-op on TCP: the emulator has no line speed)."""
+
+    def _set_serial_baud(self, baud):
+        self._ser.flush()
+        self._ser.baudrate = baud
 
     @classmethod
     def from_socket(cls, sock):
@@ -141,8 +154,11 @@ class Port:
 
 # ---- sender ----------------------------------------------------------------------------
 class Sender:
-    def __init__(self, port, log=print, cmd_timeout=0.3, ack_timeout=0.7, tries=3, pause=1.0):
-        self.port, self.log = port, log
+    def __init__(self, port, log=print, cmd_timeout=0.3, ack_timeout=0.7, tries=3, pause=1.0,
+                 baud=BASE_BAUD, switch_delay=0.05):
+        if baud not in BAUDS:
+            raise ValueError(f'baud must be one of {BAUDS}')
+        self.port, self.log, self.baud, self.switch_delay = port, log, baud, switch_delay
         self.cmd_timeout, self.ack_timeout, self.tries, self.pause = cmd_timeout, ack_timeout, tries, pause
 
     def command(self, text):
@@ -157,8 +173,20 @@ class Sender:
     def send_file(self, path, dst_dir, name, progress=None):
         with open(path, 'rb') as fh:
             data = fh.read()
-        if not self.command(f'$file,3:{dst_dir}\\{name},{len(data)},2052,115200#'):
+        if not self.command(f'$file,3:{dst_dir}\\{name},{len(data)},2052,{self.baud}#'):
             raise OtaError(f'{dst_dir}\\{name}: $file not acknowledged')
+        fast = self.baud != BASE_BAUD
+        if fast:
+            self.port.set_baud(self.baud)
+            time.sleep(self.switch_delay)        # let the screen switch too
+        try:
+            self._send_packets(data, dst_dir, name, progress)
+        finally:
+            if fast:
+                self.port.set_baud(BASE_BAUD)
+                time.sleep(0.35)                 # > 300 ms idle: the screen ends the transfer
+
+    def _send_packets(self, data, dst_dir, name, progress):
         n = packet_count(len(data))
         for i in range(n):
             pkt = packet(i, data[i * PKT_DATA:(i + 1) * PKT_DATA])   # fresh checksum on every try
@@ -175,7 +203,8 @@ class Sender:
 
     def run(self, files, dry_run=False):
         total = sum(os.path.getsize(p) for p, _, _ in files)
-        self.log(f'{len(files)} files, {total / 1024:.0f} KiB, about {total / 10240 / 60:.1f} min at 115200')
+        self.log(f'{len(files)} files, {total / 1024:.0f} KiB, '
+                 f'about {total / (self.baud / 11.25) / 60:.1f} min at {self.baud}')
         if dry_run:
             for p, d, name in files:
                 self.log(f'  would send 3:{d}\\{name} ({os.path.getsize(p)} B)')
@@ -219,6 +248,7 @@ class Receiver:
         self.buf = bytearray()
         self.file = None                          # [path, size, packets left, next id, bytearray]
         self.bad_packets = 0
+        self.bauds = []                           # baud field of every $file (tests)
 
     def feed(self, data):
         replies, passthrough = bytearray(), bytearray()
@@ -277,8 +307,9 @@ class Receiver:
             return OK
         if cmd.startswith('$file,') and self.active:
             try:
-                path, size, pkt, _baud = cmd[6:-1].rsplit(',', 3)
+                path, size, pkt, baud = cmd[6:-1].rsplit(',', 3)
                 size = int(size)
+                self.bauds.append(int(baud))
                 if int(pkt) != PKT_SIZE:
                     return b'$err#'
             except ValueError:

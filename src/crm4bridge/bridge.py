@@ -96,6 +96,20 @@ class Bridge:
         self._sync_mascot(page)
         self._send(dgus.set_page(page))
 
+    def _screen_page(self, page):
+        """The page the screen reports (VP 0x0014). The screen changes most pages by itself;
+        this keeps the bridge's idea of the current page right."""
+        if page == self.page:
+            return
+        log.debug('screen is on page %s (bridge thought %s)', page, self.page)
+        self.page = page
+        if page not in (ui.PAGE_NOT_SUPPORTED, ui.PAGE_ERROR):
+            self.page_before_popup = page
+        self._sync_mascot(page)
+
+    def request_page(self):
+        self._send(dgus.read_words(ui.VP_CUR_PAGE, 1))
+
     # ---- thumbnail picture (VP 0xC000) -----------------------------------------------
     def _thumb_target(self, page):
         if page in ui.THUMB_PREVIEW_PAGES:
@@ -229,6 +243,7 @@ class Bridge:
                 next_poll = 0
             if now >= next_poll:
                 self.poll()
+                self.request_page()
                 next_poll = now + self.cfg.poll_interval
 
     # ======================================================================== state -> screen
@@ -245,20 +260,33 @@ class Bridge:
         self.word(ui.VP_PID_BED_TEMP, self.state.get('pid_bed', 60))
         self.word(ui.VP_PID_NOZZLE_CYCLES, 5)
         self.word(ui.VP_PID_BED_CYCLES, 5)
-        self.word(ui.VP_TOGGLE_SLEEP, ui.TOGGLE_OFF)        # not supported: shown off
         self.word(ui.VP_TOGGLE_WIFI, ui.TOGGLE_OFF)
-        self._push_volume()
+        self._push_sys_config()
+        self._push_backlight()
         self._push_language_ticks()
         self.text(ui.TXT_ABOUT['model'], self.cfg.model_name)
         self.text(ui.TXT_ABOUT['size'], self.cfg.print_size)
         self.text(ui.TXT_ABOUT['web'], self.cfg.mainsail_url.replace('http://', '').replace('https://', ''))
         self.text(ui.TXT_ABOUT['hw'], 'Klipper host')
 
-    def _push_volume(self):
-        on = self.state.get('volume', True)
-        self.word(ui.VP_TOGGLE_VOLUME, ui.TOGGLE_ON if on else ui.TOGGLE_OFF)
-        cfg = ui.SYS_CONFIG_BEEP_ON if on else ui.SYS_CONFIG_BEEP_OFF
+    def _push_sys_config(self):
+        """Touch beep (Volume) and backlight auto-standby (Auto Sleep): VP 0x0080 = 5A 00,
+        VP 0x0081 bit 3 / bit 2. Stock writes 6C (both on) / 64 (beep off)."""
+        beep, sleep = self.state.get('volume', True), self.state.get('sleep', True)
+        self.word(ui.VP_TOGGLE_VOLUME, ui.TOGGLE_ON if beep else ui.TOGGLE_OFF)
+        self.word(ui.VP_TOGGLE_SLEEP, ui.TOGGLE_ON if sleep else ui.TOGGLE_OFF)
+        cfg = ui.SYS_CONFIG_BASE | (ui.SYS_BEEP if beep else 0) | (ui.SYS_STANDBY if sleep else 0)
         self._write(ui.VP_SYS_CONFIG, bytes([0x5A, 0x00, 0x00, cfg]))
+
+    def _push_backlight(self):
+        """Optional config: brightness / standby brightness (0-100), standby delay (s)."""
+        c = self.cfg
+        if c.brightness is not None or c.standby_brightness is not None:
+            hi = max(0, min(100, c.brightness if c.brightness is not None else 80))
+            lo = max(0, min(100, c.standby_brightness if c.standby_brightness is not None else 5))
+            self._write(ui.VP_BACKLIGHT, bytes([hi, lo]))
+        if c.standby_timeout is not None:
+            self.word(ui.VP_STANDBY_TIME, max(1, min(655, c.standby_timeout)) * 100)
 
     def _push_language_ticks(self):
         lang = self.cfg.language
@@ -466,6 +494,15 @@ class Bridge:
         self.word(ui.VP_TOGGLE_MOTORS, 10 if motors else 11)
         self._push_print(s)
 
+    def _push_dim(self, pct):
+        """Dim the not-yet-printed top of the thumbnail, as stock: rectangle (88,264)-(388,
+        564-3p) at alpha 0x78 through the field's SP (0x9001-0x9004) and VP 0x8800."""
+        x0, y0, x1, y1 = ui.DIM_RECT
+        bottom = y0 + (y1 - y0) * (100 - max(0, min(100, pct))) // 100
+        for i, v in enumerate((x0, y0, x1, bottom), 1):
+            self.word(ui.SP_DIM + i, v)
+        self.word(ui.VP_DIM_ALPHA, ui.DIM_ALPHA)
+
     def _push_print(self, s):
         ps = s.get('print_stats', {})
         state, fn = ps.get('state'), ps.get('filename') or ''
@@ -483,6 +520,7 @@ class Bridge:
         self.text(ui.TXT_FILENAME, os.path.splitext(os.path.basename(fn))[0])
         pct = int(progress * 100)
         self.word(ui.VP_PROGRESS_BAR, pct)
+        self._push_dim(pct if state in ('printing', 'paused') else 100)   # 100: nothing dimmed
         self.word(ui.VP_PROGRESS, pct)
         dur = ps.get('print_duration', 0) or 0
         h, m = _hm(dur)
@@ -524,6 +562,8 @@ class Bridge:
         if f.cmd != dgus.CMD_READ or f.value is None:
             return
         vp, v = f.vp, f.value
+        if vp == ui.VP_CUR_PAGE:                       # page read reply, or a swipe page change
+            return self._screen_page(v)
         log.debug('screen 0x%04X = %d', vp, v)
         self.last_event = (vp, v)
         h = KEYS.get(vp)
@@ -565,8 +605,10 @@ class Bridge:
         elif k == 7 and self.sensor_obj:
             on = s.get(self.sensor_obj, {}).get('enabled', True)
             self._gcode(f'SET_FILAMENT_SENSOR SENSOR={self.cfg.filament_sensor} ENABLE={0 if on else 1}')
-        elif k == 9:                       # Auto Sleep: the screen backlight isn't driven
-            self._not_supported()
+        elif k == 9:                       # Auto Sleep = the screen's backlight auto-standby
+            on = not self.state.get('sleep', True)
+            self.state.set('sleep', on)
+            self._push_sys_config()
 
     def k_stop(self, k):
         if k == 0xF1:
@@ -675,7 +717,14 @@ class Bridge:
     def k_file_row(self, k):
         i = k - 1
         if 0 <= i < len(self.files):
+            self._highlight_row(i)
             self.show_preview(self.files[i])
+
+    def _highlight_row(self, sel):
+        """File rows have description pointers: SP+3 is the text colour (stock marks the
+        picked file this way)."""
+        for i, sp in enumerate(ui.SP_FILE_ROW):
+            self.word(sp + 3, ui.ROW_COLOR_SELECTED if i == sel else ui.ROW_COLOR)
 
     def k_adv(self, k):
         if k in (4, 7, 8, 9):              # 4 steps-per-mm, 9 CR-Touch testing
@@ -687,7 +736,7 @@ class Bridge:
         elif k == 6:                       # volume = the screen's touch beep (VP 0x0080)
             on = not self.state.get('volume', True)
             self.state.set('volume', on)
-            self._push_volume()
+            self._push_sys_config()
         elif k == 8:                       # set home offsets
             self._not_supported()
 
@@ -835,6 +884,7 @@ class Bridge:
 
     # ======================================================================== files
     def load_files(self):
+        self._highlight_row(None)
         try:
             files = self.moon.files()
         except MoonrakerError as e:

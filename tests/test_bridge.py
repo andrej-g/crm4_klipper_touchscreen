@@ -163,7 +163,7 @@ class BridgeTest(unittest.TestCase):
     def test_creality_only_tiles(self):
         b = self.make()
         for vp, k in ((ui.K_RESET_CFG, 0), (ui.K_RESTORE_NET, 0), (ui.K_ADV, 9), (ui.K_ADV, 4),
-                      (ui.K_ADV2, 8), (ui.K_PREPARE, 7), (ui.K_TUNE, 9),
+                      (ui.K_ADV2, 8), (ui.K_PREPARE, 7),
                       (ui.K_PID_NAV, 5), (ui.VP_PID_NOZZLE_CYCLES, 5)):
             self.link.sent.clear()
             self.key(b, vp, k)
@@ -181,7 +181,7 @@ class BridgeTest(unittest.TestCase):
 
     def test_ok_returns_to_origin_page(self):
         cases = [((ui.K_ADV, 8), ui.PAGE_ADV), ((ui.K_ADV2, 8), ui.PAGE_ADV), ((ui.K_PREPARE, 7), ui.PAGE_TUNE2),
-                 ((ui.K_TUNE, 9), 14), ((ui.K_PID_NAV, 5), ui.PAGE_TUNE), ((ui.VP_MAX_SPEED[3], 50), 129)]
+                 ((ui.K_PID_NAV, 5), ui.PAGE_TUNE), ((ui.VP_MAX_SPEED[3], 50), 129)]
         b = self.make()
         for (vp, v), page in cases:
             b.set_page(ui.PAGE_MAIN)                 # stale page the bridge last set itself
@@ -233,6 +233,65 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual(sent[ui.VP_SYS_CONFIG], bytes([0x5A, 0, 0, 0x64]))
         self.assertEqual(self.link.words()[ui.VP_TOGGLE_VOLUME], ui.TOGGLE_OFF)
         self.assertEqual(b.state.get('volume'), False)
+
+    def sys_config(self):
+        sent = {f.vp: f.payload() for f in self.link.sent if f.cmd == 0x82}
+        return sent[ui.VP_SYS_CONFIG][3]
+
+    def test_auto_sleep_toggles_standby(self):
+        b = self.make()
+        b.push_static()
+        self.assertEqual(self.sys_config(), 0x6C)
+        self.key(b, ui.K_TUNE, 9)                                   # Auto Sleep off
+        self.assertEqual(self.sys_config(), 0x68)
+        self.assertEqual(self.link.words()[ui.VP_TOGGLE_SLEEP], ui.TOGGLE_OFF)
+        self.key(b, ui.K_ADV2, 6)                                   # and Volume off
+        self.assertEqual(self.sys_config(), 0x60)
+        self.key(b, ui.K_TUNE, 9)
+        self.assertEqual(self.sys_config(), 0x64)
+        self.assertNotIn(ui.PAGE_NOT_SUPPORTED, self.link.pages())
+
+    def test_backlight_config(self):
+        b = self.make()
+        b.push_static()
+        self.assertNotIn(ui.VP_BACKLIGHT, {f.vp for f in self.link.sent})   # untouched by default
+        b.cfg.brightness, b.cfg.standby_brightness, b.cfg.standby_timeout = 60, 10, 120
+        b.push_static()
+        sent = {f.vp: f.payload() for f in self.link.sent if f.cmd == 0x82}
+        self.assertEqual(sent[ui.VP_BACKLIGHT], bytes([60, 10]))
+        self.assertEqual(self.link.words()[ui.VP_STANDBY_TIME], 12000)
+
+    def test_screen_reported_page(self):
+        b = self.make()
+        b.request_page()
+        self.assertEqual(self.link.sent[-1].cmd, 0x83)
+        self.assertEqual(self.link.sent[-1].vp, ui.VP_CUR_PAGE)
+        b.set_page(ui.PAGE_MAIN)
+        self.key(b, ui.VP_CUR_PAGE, ui.PAGE_ADV)                    # the screen moved by itself
+        self.assertEqual(b.page, ui.PAGE_ADV)
+        self.key(b, ui.K_ADV, 9)                                    # unsupported tile
+        self.key(b, ui.VP_CUR_PAGE, ui.PAGE_NOT_SUPPORTED)
+        self.key(b, ui.K_PREPARE, 0xB)                              # Ok
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_ADV)
+
+    def test_progress_dim(self):
+        b = self.make()
+        x0, y0, x1, y1 = ui.DIM_RECT
+        self.assertEqual(self.link.words()[ui.SP_DIM + 4], y0)                 # idle: nothing dimmed
+        self.moon.status['print_stats'] = {'state': 'printing', 'filename': 'a.gcode', 'print_duration': 60}
+        self.moon.status['display_status'] = {'progress': 0.25}
+        b.poll()
+        w = self.link.words()
+        self.assertEqual([w[ui.SP_DIM + i] for i in (1, 2, 3, 4)], [x0, y0, x1, y0 + (y1 - y0) * 75 // 100])
+        self.assertEqual(w[ui.VP_DIM_ALPHA], ui.DIM_ALPHA)
+
+    def test_file_row_highlight(self):
+        b = self.make()
+        b.load_files()
+        self.key(b, ui.K_FILE_ROW, 2)
+        w = self.link.words()
+        self.assertEqual(w[ui.SP_FILE_ROW[1] + 3], ui.ROW_COLOR_SELECTED)
+        self.assertEqual(w[ui.SP_FILE_ROW[0] + 3], ui.ROW_COLOR)
 
 
 class _Inline:

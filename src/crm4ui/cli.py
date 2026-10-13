@@ -57,11 +57,11 @@ def cmd_flash(a):
         print('nothing to send')
         return 0
     if a.dry_run:
-        ota.Sender(None).run(files, dry_run=True)
+        ota.Sender(None, baud=a.baud).run(files, dry_run=True)
         return 0
     port = ota.Port(a.port)
     try:
-        ota.Sender(port).run(files)
+        ota.Sender(port, baud=a.baud).run(files)
     except ota.OtaError as e:
         print(f'error: {e}', file=sys.stderr)
         return 1
@@ -142,6 +142,8 @@ def main(argv=None):
     p.add_argument('--changed-from', metavar='REF_PRIVATE',
                    help='send only files that differ from this private/ dir (e.g. what is on the screen now)')
     p.add_argument('--files', nargs='+', metavar='REL', help='send only these files (relative, e.g. bin/13.bin)')
+    p.add_argument('--baud', type=int, default=115200, choices=(115200, 230400, 460800, 921600),
+                   help='data speed per file (the screen switches for the packets only; untested above 115200)')
     p.add_argument('--dry-run', action='store_true', help='list what would be sent')
     p.set_defaults(fn=cmd_flash)
 

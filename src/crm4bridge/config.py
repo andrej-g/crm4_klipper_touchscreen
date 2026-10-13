@@ -27,6 +27,9 @@ DEFAULTS = {
     'shutdown_plug_output': '1',
     'shutdown_plug_delay': '60',
     'thumbnails': 'true',
+    'brightness': '',
+    'standby_brightness': '',
+    'standby_timeout': '',
     'spoolman': 'true',
     'spoolman_interval': '10',
 }
@@ -69,6 +72,9 @@ class Config:
         self.shutdown_plug_output = b.getint('shutdown_plug_output')
         self.shutdown_plug_delay = b.getfloat('shutdown_plug_delay')
         self.thumbnails = b.getboolean('thumbnails')
+        opt = lambda k: b.getint(k) if b[k].strip() else None
+        self.brightness, self.standby_brightness = opt('brightness'), opt('standby_brightness')
+        self.standby_timeout = opt('standby_timeout')
         self.spoolman = b.getboolean('spoolman')
         self.spoolman_interval = b.getfloat('spoolman_interval')
         self.presets = dict(DEFAULT_PRESETS)

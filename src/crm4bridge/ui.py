@@ -81,7 +81,6 @@ VP_TOGGLE_MOTORS = 0x421D          # value 10 = on, 11 = off
 VP_TOGGLE_VOLUME = 0x4224
 VP_TOGGLE_WIFI = 0x4220
 VP_SYS_CONFIG = 0x0080              # DGUS system config: 5A 00 00 6C = touch beep on, 64 = off
-SYS_CONFIG_BEEP_ON, SYS_CONFIG_BEEP_OFF = 0x6C, 0x64
 VP_HOME_OFFSET_Z = 0x707C
 VP_LANG_CHECK = tuple(range(0x4229, 0x4232))             # page 120: 1 shows the tick
 
@@ -165,7 +164,6 @@ NOT_SUPPORTED_RETURN = {
     (0x410C, None): PAGE_ADV,                                # home offsets (140-142)
     (K_PREPARE, 7): PAGE_TUNE2, (K_PREPARE, 9): PAGE_TUNE2,  # Feedback, WiFi
     (K_RESET_CFG, None): PAGE_TUNE2, (K_RESTORE_NET, None): PAGE_TUNE2,
-    (K_TUNE, 9): 14,                                         # Auto Sleep
     (K_PID_NAV, 5): PAGE_TUNE,                               # Manual Set PID tab
     (VP_PID_NOZZLE_CYCLES, None): 122, (VP_PID_BED_CYCLES, None): 125,
     (VP_MAX_ACCEL[2], None): 128, (VP_MAX_ACCEL[3], None): 128,
@@ -182,3 +180,20 @@ for _vp in VP_STEPS:
 THUMB_PREVIEW_PAGES = {119}
 THUMB_PRINT_PAGES = {9, 10, 11, 12}
 MASCOT_SHOWN, MASCOT_HIDDEN = 4, 0
+
+# ---- screen system VPs (screen firmware RE, stage 2) ---------------------------------------------
+VP_CUR_PAGE = 0x0014               # read: current page (refreshed by the screen on each read)
+VP_BACKLIGHT = 0x0082              # hi = brightness 0-100, lo = standby brightness 0-100
+VP_STANDBY_TIME = 0x0083           # standby delay in 10 ms units
+SYS_CONFIG_BASE = 0x60             # VP 0x0081 bits used: 3 = touch beep, 2 = backlight auto-standby
+SYS_BEEP, SYS_STANDBY = 0x08, 0x04
+
+# print-progress dim over the thumbnail (type 0x26 field, VP 0x8800, description at SP 0x9000)
+VP_DIM_ALPHA = 0x8800
+SP_DIM = 0x9000                    # +1 x0, +2 y0, +3 x1, +4 y1
+DIM_RECT = (88, 264, 388, 564)
+DIM_ALPHA = 0x78                   # stock: ~47 % toward black
+
+# file list rows: description pointers, colour at SP+3 (stock highlights the picked row)
+SP_FILE_ROW = [0x6010 + 0x10 * i for i in range(24)]
+ROW_COLOR, ROW_COLOR_SELECTED = 0xFFFF, 0xB166     # white; Klipper red #B12F35

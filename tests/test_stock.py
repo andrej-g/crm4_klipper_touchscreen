@@ -181,6 +181,25 @@ class StockTest(unittest.TestCase):
         self.assertEqual({r.page_next for r in prj.touch.page(45) if r.kind != 'return_key' or r.vp == 0}, {121, 49, 50, 51, 52})
         self.assertIn(0x9050, {r.vp for r in prj.vars.pages[53]})
 
+    def test_no_inherited_description_pointers(self):
+        """Cloned fields must not keep the source's SP: the screen would overwrite them from
+        the source's VP RAM (e.g. every clone of a file-row text drawn as file row 1)."""
+        from collections import Counter
+
+        def sps(prj):
+            c = Counter()
+            for page, recs in prj.vars.pages.items():
+                for r in recs:
+                    sp = int.from_bytes(r.data[2:4], 'big')
+                    if sp < 0xFF00:
+                        c[(page, sp)] += 1
+            return c
+        stock = sps(Project(STOCK))
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
+        extra = sps(prj) - stock
+        self.assertEqual(dict(extra), {})
+
 
 if __name__ == '__main__':
     unittest.main()

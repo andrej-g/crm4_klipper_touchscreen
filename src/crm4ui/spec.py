@@ -106,6 +106,11 @@ def build_clone(project, d):
     if src is None:
         raise SpecError(f"clone: no record VP {d['vp']} on page {d['from_page']}")
     r = src.copy()
+    if not d.get('keep_sp'):
+        # A description pointer (SP) makes the screen reload the whole field description
+        # from VP RAM on every redraw (screen firmware RE, stage 2). A clone must not share
+        # its source's SP, or it would be drawn as the source field (e.g. file row 1).
+        r.data[2:4] = NO_SP.to_bytes(2, 'big')
     if 'pos' in d:
         r.pos = [_int(x) for x in d['pos']]
     if 'new_vp' in d:
