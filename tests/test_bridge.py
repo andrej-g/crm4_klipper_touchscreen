@@ -41,6 +41,7 @@ class FakeMoon:
         self.calls = []
         self.hold = None                 # threading.Event: PID_CALIBRATE blocks until it is set
         self.fail = False                # ... and then fails
+        self.failing = set()             # scripts that fail at once
         self.status = {
             'extruder': {'temperature': 210.4, 'target': 215, 'can_extrude': True},
             'heater_bed': {'temperature': 59.6, 'target': 60},
@@ -83,6 +84,8 @@ class FakeMoon:
             self.hold.wait(5)
             if self.fail:
                 raise MoonrakerError('pid_calibrate interrupted')
+        if script in self.failing:
+            raise MoonrakerError('Probe triggered prior to movement')
 
     def __getattr__(self, name):
         def call(*a):
@@ -282,12 +285,51 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual(self.link.sent[-1].cmd, 0x83)
         self.assertEqual(self.link.sent[-1].vp, ui.VP_CUR_PAGE)
         b.set_page(ui.PAGE_MAIN)
+        b.request_page()
         self.key(b, ui.VP_CUR_PAGE, ui.PAGE_ADV)                    # the screen moved by itself
         self.assertEqual(b.page, ui.PAGE_ADV)
         self.key(b, ui.K_ADV, 9)                                    # unsupported tile
+        b.request_page()
         self.key(b, ui.VP_CUR_PAGE, ui.PAGE_NOT_SUPPORTED)
         self.key(b, ui.K_PREPARE, 0xB)                              # Ok
         self.assertEqual(self.link.pages()[-1], ui.PAGE_ADV)
+
+    def test_stale_page_report_ignored(self):
+        b = self.make()
+        self.pending(b)
+        b.set_page(ui.PAGE_PID_NOZZLE)
+        b.request_page()                                            # read sent on page 122 ...
+        self.key(b, ui.K_PID, 1)                                    # ... Start -> 123 and the graph
+        self.assertIsNotNone(b.curve)
+        self.key(b, ui.VP_CUR_PAGE, ui.PAGE_PID_NOZZLE)             # ... the old answer arrives late
+        self.assertEqual(b.page, ui.PAGE_PID_NOZZLE_RUN)
+        self.assertIsNotNone(b.curve)
+        self.key(b, ui.VP_CUR_PAGE, ui.PAGE_MAIN)                   # unrequested: ignored as well
+        self.assertIsNotNone(b.curve)
+        b.request_page()
+        self.key(b, ui.VP_CUR_PAGE, ui.PAGE_PID_NOZZLE_RUN)
+        self.assertEqual(b.page, ui.PAGE_PID_NOZZLE_RUN)
+        self.finish(b)
+
+    def test_failed_command_error_times_out(self):
+        import time
+        b = self.make()
+        b.set_page(ui.PAGE_AUTOLEVEL)
+        self.moon.failing.add(b.cfg.mesh_gcode)
+        self.key(b, ui.K_LEVEL, 0xF1)                               # leveling -> fails
+        self.assertEqual(self.link.pages()[-2:], [ui.PAGE_LEVELING, ui.PAGE_ERROR])
+        b.timers(time.monotonic() + 1)
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_ERROR)      # still readable
+        b.timers(time.monotonic() + 9)
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_AUTOLEVEL)  # not the "levelling..." page
+        self.moon.failing = {'M84'}
+        b.set_page(ui.PAGE_MOVE[0])
+        self.key(b, ui.K_PREPARE, 6)                                # motors off -> fails
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_ERROR)
+        b.set_page(ui.PAGE_MAIN)                                    # something else took over
+        b.timers(time.monotonic() + 9)
+        self.assertEqual(self.link.pages()[-1], ui.PAGE_MAIN)
+        self.assertEqual(b.popup_until, 0.0)
 
     def test_progress_dim(self):
         b = self.make()
@@ -391,8 +433,8 @@ class BridgeTest(unittest.TestCase):
         b.timers(10.0)
         frames = self.curve_frames()
         self.assertEqual(len(frames), 2)
-        self.assertEqual(frames[0].to_bytes(), bytes.fromhex('5aa50d8203105aa50100000200d200d2'))   # 210.4 -> 210
-        self.assertEqual(frames[1].to_bytes(), bytes.fromhex('5aa50d8203105aa50100010200d200d2'))   # target 210
+        self.assertEqual(frames[0].to_bytes(), bytes.fromhex('5aa50b8203105aa50100000100d2'))       # 210.4 -> 210, one value
+        self.assertEqual(frames[1].to_bytes(), bytes.fromhex('5aa50b8203105aa50100010100d2'))   # target 210
         self.assertEqual(self.link.gaps[-1], b.cfg.curve_byte_gap)
         b.timers(10.5)                                                      # not yet (curve_interval)
         self.assertEqual(len(self.curve_frames()), 2)
@@ -401,7 +443,7 @@ class BridgeTest(unittest.TestCase):
         b.timers(11.0)
         frames = self.curve_frames()
         self.assertEqual(len(frames), 4)
-        self.assertEqual(frames[2].payload()[6:], bytes.fromhex('00d200d5'))          # (previous, current)
+        self.assertEqual(frames[2].payload()[6:], bytes.fromhex('00d5'))              # current only
         self.finish(b)                                                      # PID_CALIBRATE done
         self.assertIsNone(b.curve)
         self.assertEqual(self.link.pages()[-1], ui.PAGE_PID_NOZZLE_DONE)
@@ -414,7 +456,7 @@ class BridgeTest(unittest.TestCase):
         self.key(b, ui.K_PID, 3)
         b.timers(10.0)
         self.assertEqual([f.to_bytes()[10] for f in self.curve_frames()], [2, 3])
-        self.assertEqual(self.curve_frames()[0].payload()[6:], bytes.fromhex('003c003c'))     # 59.6 -> 60
+        self.assertEqual(self.curve_frames()[0].payload()[6:], bytes.fromhex('003c'))         # 59.6 -> 60
         self.finish(b)
         self.link.sent.clear()
         self.key(b, ui.K_PID, 4)                                            # Yes: SAVE_CONFIG
@@ -424,6 +466,7 @@ class BridgeTest(unittest.TestCase):
         b = self.make()
         self.pending(b)
         self.key(b, ui.K_PID, 1)
+        b.request_page()
         self.key(b, ui.VP_CUR_PAGE, ui.PAGE_MAIN)                          # the screen went elsewhere
         self.assertIsNone(b.curve)
         self.finish(b)
@@ -434,6 +477,7 @@ class BridgeTest(unittest.TestCase):
         self.assertIsNone(b.curve)
         _wait(lambda: self.link.pages()[-1] == ui.PAGE_ERROR)
         self.assertEqual(self.link.pages()[-1], ui.PAGE_ERROR)
+        self.assertEqual(b.page_before_popup, ui.PAGE_PID_NOZZLE)          # where the timed error returns
 
     def test_dry_run_pid_graph(self):
         b = self.make(dry_run=True)

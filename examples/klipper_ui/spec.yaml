@@ -12,3 +12,4 @@ include:
   - ../machine_page/spec.yaml
   - ../fan_speed/spec.yaml
   - ../firmware_restart_tile/spec.yaml
+  - ../mesh_grid/spec.yaml

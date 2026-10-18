@@ -21,6 +21,7 @@ log = logging.getLogger('crm4bridge')
 
 REPAINT_EVERY = 30.0      # s: full repaint in case the screen rebooted
 POPUP_SECONDS = 3.0       # s: how long a bridge-timed message (error page without a button) stays
+ERROR_SECONDS = 8.0       # s: the same for a failed command (longer: it is worth reading)
 
 
 def _hm(seconds):
@@ -51,6 +52,8 @@ class Bridge:
         self.selected = None
         self.page = None
         self.page_before_popup = ui.PAGE_MAIN
+        self.page_seq = 0                # bumped by every set_page()
+        self.page_read_seq = None        # page_seq when the last VP 0x0014 read was sent
         self.last_event = None
         self.boot_anim = 0
         self.next_spool_poll = 0.0
@@ -99,6 +102,7 @@ class Bridge:
         if page != ui.PAGE_NOT_SUPPORTED and page != ui.PAGE_ERROR:
             self.page_before_popup = page
         self.page = page
+        self.page_seq += 1
         log.debug('page %s %s', page, why)
         self._sync_mascot(page)
         self._curve_page(page)
@@ -106,7 +110,15 @@ class Bridge:
 
     def _screen_page(self, page):
         """The page the screen reports (VP 0x0014). The screen changes most pages by itself;
-        this keeps the bridge's idea of the current page right."""
+        this keeps the bridge's idea of the current page right.
+
+        A reply to a read sent before the bridge's last set_page() describes the old page
+        (the read and the page switch crossed on the line); it is ignored, otherwise it
+        would undo the switch, e.g. stop the PID graph right after Start."""
+        sent_at, self.page_read_seq = self.page_read_seq, None
+        if sent_at is None or sent_at != self.page_seq:
+            log.debug('stale page report %s ignored', page)
+            return
         if page == self.page:
             return
         log.debug('screen is on page %s (bridge thought %s)', page, self.page)
@@ -117,6 +129,7 @@ class Bridge:
         self._curve_page(page)
 
     def request_page(self):
+        self.page_read_seq = self.page_seq
         self._send(dgus.read_words(ui.VP_CUR_PAGE, 1))
 
     # ---- thumbnail picture (VP 0xC000) -----------------------------------------------
@@ -206,9 +219,11 @@ class Bridge:
             except MoonrakerError as e:
                 ok = False
                 log.warning('%s failed: %s', label, e)
-                self.text(ui.TXT_ERROR, str(e)[:20])
                 self.text(ui.TXT_MACHINE_MSG, str(e))
-                self.set_page(ui.PAGE_ERROR, 'action failed')
+                # page 109 has no button: show the error for a while, then go back to the
+                # page the command came from (``then`` may pick another one)
+                self._timed_message(str(e), self.page_before_popup or ui.PAGE_MAIN,
+                                    'action failed', ERROR_SECONDS)
             if then:
                 then(ok)
         self.jobs.submit(run)
@@ -263,14 +278,15 @@ class Bridge:
             self.push_curve()
         if self.popup_until and now >= self.popup_until:
             self.popup_until = 0.0
-            self.set_page(self.page_before_popup or ui.PAGE_MAIN, 'popup timeout')
+            if self.page == ui.PAGE_ERROR:        # not if something else replaced the message
+                self.set_page(self.page_before_popup or ui.PAGE_MAIN, 'popup timeout')
 
-    def _timed_message(self, message, back, why):
-        """The error page (109) has no button: show ``message`` there for POPUP_SECONDS,
+    def _timed_message(self, message, back, why, seconds=POPUP_SECONDS):
+        """The error page (109) has no button: show ``message`` there for ``seconds``,
         then return to ``back``."""
         self.text(ui.TXT_ERROR, message[:ui.TXT_ERROR[1]])
         self.page_before_popup = back
-        self.popup_until = time.monotonic() + POPUP_SECONDS
+        self.popup_until = time.monotonic() + seconds
         self.set_page(ui.PAGE_ERROR, why)
 
     # ======================================================================== state -> screen
@@ -707,10 +723,12 @@ class Bridge:
 
             def done(ok):
                 # as stock: the grid (page 28) after levelling, or a timed "No bed mesh
-                # loaded" that returns to the auto-level page. A failed mesh_gcode has
-                # already put its error on page 109; leave that where it is.
+                # loaded" that returns to the auto-level page. A failed mesh_gcode is
+                # already on page 109 (timed by _job); it returns to the auto-level page.
                 if ok:
                     self.show_mesh(ui.MESH_PAGES[self.cfg.mesh_grid][0], ui.PAGE_AUTOLEVEL)
+                else:                      # the timed error returns here, not to "levelling..."
+                    self.page_before_popup = ui.PAGE_AUTOLEVEL
             self._gcode(self.cfg.mesh_gcode, 'bed mesh', then=done)
 
     # ---- bed mesh grid (pages 28/135, crm4bridge.mesh) ---------------------------
@@ -819,7 +837,10 @@ class Bridge:
 
             def finished(ok):
                 self.curve_stop()
-                self.set_page(done if ok else ui.PAGE_ERROR, 'pid done')
+                if ok:
+                    self.set_page(done, 'pid done')
+                else:                      # the timed error returns to the autotune page
+                    self.page_before_popup = ui.PAGE_PID_NOZZLE if k == 1 else ui.PAGE_PID_BED
             self._gcode(f'PID_CALIBRATE HEATER={heater} TARGET={target}', then=finished)
         elif k in (2, 4):
             self._gcode('SAVE_CONFIG', 'SAVE_CONFIG (Klipper restarts)')
@@ -851,8 +872,8 @@ class Bridge:
             self._send(curve.clear_frame(ch))
 
     def push_curve(self):
-        """One graph point per channel from the last polled status: (previous, current)
-        temperature and the autotune target, as the stock firmware sends them."""
+        """One graph point per channel from the last polled status: the temperature and
+        the autotune target (stock sends (previous, current); see crm4bridge.curve)."""
         c = self.curve
         if c is None:
             return

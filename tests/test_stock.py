@@ -34,7 +34,7 @@ class StockTest(unittest.TestCase):
             self.assertEqual(tree_digest(STOCK), tree_digest(tmp))
 
     def test_examples_build(self):
-        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'english_only', 'input_limits', 'popup_cleanup', 'unsupported_features', 'spoolman', 'klipper_ui'):
+        for name in ('splash', 'machine_page', 'recolor_amber', 'klipper_branding', 'print_page_shortcuts', 'keypad_titles', 'english_only', 'input_limits', 'popup_cleanup', 'unsupported_features', 'spoolman', 'mesh_grid', 'klipper_ui'):
             with self.subTest(example=name):
                 prj = Project(STOCK)
                 apply(prj, load_spec(os.path.join(EXAMPLES, name, 'spec.yaml')), log=lambda *a: None)
@@ -199,6 +199,15 @@ class StockTest(unittest.TestCase):
         apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
         extra = sps(prj) - stock
         self.assertEqual(dict(extra), {})
+
+    def test_mesh_grid_one_colour(self):
+        prj = Project(STOCK)
+        apply(prj, load_spec(os.path.join(EXAMPLES, 'klipper_ui', 'spec.yaml')), log=lambda *a: None)
+        for page, n in ((27, 16), (28, 25), (134, 16), (135, 25)):
+            fields = [r for r in prj.vars.pages[page] if 0x7100 <= r.vp <= 0x7130]
+            self.assertEqual(len(fields), n)
+            self.assertEqual({r.color for r in fields}, {0xFFFF}, page)
+        self.assertNotEqual([r.color for r in prj.vars.pages[35] if r.vp == 0x7132], [])   # other page untouched
 
 
 if __name__ == '__main__':

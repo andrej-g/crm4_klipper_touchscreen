@@ -32,15 +32,15 @@ class FrameTest(unittest.TestCase):
 
 
 class StreamTest(unittest.TestCase):
-    def test_channels_and_pairs(self):
+    def test_channels_and_points(self):
         s = curve.CurveStream('extruder', 210)
         self.assertEqual([f.vp for f in s.clear_frames()], [0x0301, 0x0303])
         first = s.frames(25.4)
         self.assertEqual([f.to_bytes()[10] for f in first], [0, 1])          # channels 0 and 1
-        self.assertEqual(first[0].payload()[6:], bytes.fromhex('00190019'))     # 25.4 -> 25, twice (no previous)
-        self.assertEqual(first[1].payload()[6:], bytes.fromhex('00d200d2'))     # target 210, twice
+        self.assertEqual(first[0].payload()[4:], bytes.fromhex('00010019'))     # 1 value: 25.4 -> 25
+        self.assertEqual(first[1].payload()[4:], bytes.fromhex('010100d2'))     # target 210
         second = s.frames(30.0)
-        self.assertEqual(second[0].payload()[6:], bytes.fromhex('0019001e'))    # previous, current
+        self.assertEqual(second[0].payload()[6:], bytes.fromhex('001e'))        # current only
         bed = curve.CurveStream('heater_bed', 60)
         self.assertEqual([f.to_bytes()[10] for f in bed.frames(22)], [2, 3])
 

@@ -1,0 +1,30 @@
+# Mesh grid pages (27/28 after levelling, 134/135 "auto leveling data"): every value in
+# one colour. Stock draws five of the 5x5 values in 0xDEDB and the whole 4x4 grid in grey
+# 0x8408, which reads as "different" values on a mesh where nothing is different.
+# The bridge fills the values (crm4bridge/mesh.py).
+field_colors:
+  - {vp: 0x7100, color: 0xFFFF}
+  - {vp: 0x7102, color: 0xFFFF}
+  - {vp: 0x7104, color: 0xFFFF}
+  - {vp: 0x7106, color: 0xFFFF}
+  - {vp: 0x7108, color: 0xFFFF}
+  - {vp: 0x710A, color: 0xFFFF}
+  - {vp: 0x710C, color: 0xFFFF}
+  - {vp: 0x710E, color: 0xFFFF}
+  - {vp: 0x7110, color: 0xFFFF}
+  - {vp: 0x7112, color: 0xFFFF}
+  - {vp: 0x7114, color: 0xFFFF}
+  - {vp: 0x7116, color: 0xFFFF}
+  - {vp: 0x7118, color: 0xFFFF}
+  - {vp: 0x711A, color: 0xFFFF}
+  - {vp: 0x711C, color: 0xFFFF}
+  - {vp: 0x711E, color: 0xFFFF}
+  - {vp: 0x7120, color: 0xFFFF}
+  - {vp: 0x7122, color: 0xFFFF}
+  - {vp: 0x7124, color: 0xFFFF}
+  - {vp: 0x7126, color: 0xFFFF}
+  - {vp: 0x7128, color: 0xFFFF}
+  - {vp: 0x712A, color: 0xFFFF}
+  - {vp: 0x712C, color: 0xFFFF}
+  - {vp: 0x712E, color: 0xFFFF}
+  - {vp: 0x7130, color: 0xFFFF}

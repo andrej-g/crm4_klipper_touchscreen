@@ -13,6 +13,11 @@ these frames leave the mainboard about 800 us apart (every other frame is sent
 back to back). When PID is saved or aborted the firmware writes 0 to VP
 ``0x0301`` / ``0x0303`` / ``0x0305`` / ``0x0307``.
 
+Unlike stock, the bridge sends one value per channel and tick
+(``... 01 00 <ch> 01 <current>``): the previous value doubles every point, so the
+387 px graph would hold only ~3 minutes of a longer autotune. One value per
+second gives ~6.5 minutes on screen; the frame format is the same.
+
 Screen side (screen firmware RE, section 2a): eight ring buffers of 0x800
 words; VP ``0x0300 + 2n`` is channel n's write pointer and ``0x0301 + 2n``
 its length, and writing 0 to the length clears the channel. The curve fields
@@ -26,7 +31,7 @@ VP_CURVE_LEN = 0x0301           # + 2 * channel
 MAGIC = 0x5AA5
 BLOCKS = 0x0100                 # one block per frame, as stock
 CHANNELS = {'extruder': (0, 1), 'heater_bed': (2, 3)}     # (temperature, target)
-POINTS_PER_FRAME = 2            # stock sends the previous and the current value
+POINTS_PER_FRAME = 1            # stock sends (previous, current); see the module doc
 BYTE_GAP_S = 0.0008             # inter-byte spacing seen in the stock firmware
 INTERVAL_S = 1.0
 
@@ -49,21 +54,15 @@ def as_word(temp):
 
 class CurveStream:
     """The two channels of one heater's autotune; ``frames(temp)`` gives the frames
-    for one tick, each carrying (previous, current) like the stock firmware."""
+    for one tick, one point per channel."""
 
     def __init__(self, heater, target):
         self.heater = heater
         self.ch_temp, self.ch_target = CHANNELS[heater]
         self.target = as_word(target)
-        self.last = {}
 
     def clear_frames(self):
         return [clear_frame(self.ch_temp), clear_frame(self.ch_target)]
 
     def frames(self, temp):
-        out = []
-        for ch, value in ((self.ch_temp, as_word(temp)), (self.ch_target, self.target)):
-            old = self.last.get(ch, value)
-            self.last[ch] = value
-            out.append(write_frame(ch, old, value))
-        return out
+        return [write_frame(self.ch_temp, as_word(temp)), write_frame(self.ch_target, self.target)]

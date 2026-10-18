@@ -120,9 +120,9 @@ class EmulatorTest(unittest.TestCase):
         for i in range(60):
             for f in curve.CurveStream('extruder', 200).frames(100 + i * 2):
                 s.handle_host(f)
-        self.assertEqual(len(s.curves[0]), 120)                                   # two points per frame
-        self.assertEqual(list(s.curves[0])[:3], [100, 100, 102])
-        self.assertEqual(len(s.curves[1]), 120)
+        self.assertEqual(len(s.curves[0]), 60)                                    # one point per frame
+        self.assertEqual(list(s.curves[0])[:3], [100, 102, 104])
+        self.assertEqual(len(s.curves[1]), 60)
         before = s.render().copy()
         s.handle_host(curve.clear_frame(0))
         self.assertEqual(len(s.curves[0]), 0)
