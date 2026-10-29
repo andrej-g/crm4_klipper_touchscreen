@@ -337,7 +337,10 @@ class ScreenSim:
             if s:
                 b = r.box
                 px = max(10, int(x[27] * 0.85))                 # ASSUMPTION: y dot size -> pixels
-                dr.text((min(b[0], b[2]), min(b[1], b[3])), s, font=self._font(px), fill=_rgb(r.color))
+                font = self._font(px)
+                left, right = min(b[0], b[2]), max(b[0], b[2])
+                tx = (left + right - dr.textlength(s, font=font)) / 2 if x[28] & 0x40 else left
+                dr.text((tx, min(b[1], b[3])), s, font=font, fill=_rgb(r.color))
         elif r.type == 0x08:                                    # JPEG picture control (thumbnail)
             img = self._picture(r.vp)
             if img is not None:

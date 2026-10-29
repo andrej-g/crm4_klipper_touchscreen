@@ -71,6 +71,16 @@ def _load_png(spec, p, size=None):
 
 
 # ---- record builders ------------------------------------------------------------
+def _text_align(record, spec):
+    if 'text_align' not in spec:
+        return
+    alignment = spec['text_align']
+    if alignment not in ('left', 'center'):
+        raise SpecError('text_align must be left or center')
+    # DACAI text mode byte: bit 6 selects centered rendering. Preserve encoding.
+    record.data[28] = (record.data[28] & ~0x40) | (0x40 if alignment == 'center' else 0)
+
+
 def build_text(project, d):
     t = project.vars.template(0x11).copy()
     box = _check_area(d['box'], 'text')
@@ -80,6 +90,7 @@ def build_text(project, d):
     t.box = box
     t.color = _int(d.get('color', 0xFFFF))
     t.text_len = _int(d.get('length', 20))
+    _text_align(t, d)
     return t
 
 
@@ -125,6 +136,7 @@ def build_clone(project, d):
             r.text_len = _int(d['length'])
         if 'font' in d:                               # [x dots, y dots], e.g. [10, 20]
             r.data[26], r.data[27] = (_int(v) for v in d['font'])
+        _text_align(r, d)
     elif r.type == 0x00:                              # icon variable: value range -> icon range
         x = r.data
         lo, hi = struct.unpack('>HH', x[12:16])

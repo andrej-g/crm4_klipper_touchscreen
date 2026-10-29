@@ -113,9 +113,10 @@ pages:
 ```
 
 - `clone` copies an existing touch record (numeric input, increment, …) onto this page with a new area: `{type: clone, from_page: 14, vp: 0x7048, area: [14, 80, 234, 139]}`, optionally with `key` to disambiguate, `page_next` to override, `keyboard_page` to open a different keypad page, and `new_vp` / `min` / `max` for a numeric input of your own.
-- `clone` vars copy an existing field (`from_page`, `vp`) with any of: `pos`, `new_vp`, `color`; for text fields `box`, `length` and `font: [x dots, y dots]`; for icon variables `v_min`, `v_max`, `icon_min`, `icon_max` (defaults to `icon_min` + the value range) and `lib`.
+- `clone` vars copy an existing field (`from_page`, `vp`) with any of: `pos`, `new_vp`, `color`; for text fields `box`, `length`, `font: [x dots, y dots]` and `text_align: left|center`; for icon variables `v_min`, `v_max`, `icon_min`, `icon_max` (defaults to `icon_min` + the value range) and `lib`.
 - `return_key` sends `5A A5 06 83 <vp> 01 <key>` to the host when released. `page_next` switches page locally as well.
 - `text` / `number` are cloned from a stock record of the same type (font, alignment), with the given fields replaced. Colours are RGB565.
+- Text fields accept `text_align: left|center` to override inherited alignment. This sets/clears text-mode bit 6 while preserving encoding and other mode bits. Centered text is drawn within `box`; use a box centered on the desired screen coordinate. Physical alignment follows the DACAI renderer; emulator glyph metrics remain approximate.
 - Use VPs `0x9000–0x9FFF` for custom content. Neither the stock UI nor the Creality firmware uses them.
 
 ## `touch_edits`: change existing touch records

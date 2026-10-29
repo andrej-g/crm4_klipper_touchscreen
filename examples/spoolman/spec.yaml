@@ -179,7 +179,7 @@ pages:
       - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9216, pos: [72, 620], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9270, box: [160, 606, 405, 628], length: 28, font: [10, 20], color: "#FFFFFF"}
       - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x92D0, box: [160, 642, 405, 664], length: 28, font: [10, 20], color: "#A0A0A0"}
-      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9068, box: [200, 730, 290, 762], length: 8, font: [14, 28], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9068, box: [185, 730, 295, 762], length: 8, font: [14, 28], text_align: center, color: "#FFFFFF"}
 
 field_edits:
   - {page: 1, vp: 0x4227, pos: [90, 280], at: [90, 240]}     # Benchy down, below the spool tile
