@@ -55,6 +55,9 @@ remove_vars:
 
 remove_touch:
   - {page: 56, vp: 0x40D3}                 # file rows (re-added below as spool rows)
+  # Stock arrows are FD05: local-only, never uploaded to the bridge.
+  - {page: 56, vp: 0x40D2, key: 3}
+  - {page: 56, vp: 0x40D2, key: 4}
 
 icons:
   - {lib: 18, id: 20, png: icons/swatch_00.png}
@@ -143,6 +146,8 @@ pages:
   - id: 56
     extend: true
     touch:
+      - {type: return_key, area: [42, 693, 178, 793], vp: 0x9060, key: 0x10}
+      - {type: return_key, area: [300, 693, 438, 794], vp: 0x9060, key: 0x11}
       - {type: return_key, area: [22, 92, 462, 178], vp: 0x9060, key: 1}
       - {type: return_key, area: [22, 192, 462, 278], vp: 0x9060, key: 2}
       - {type: return_key, area: [22, 292, 462, 378], vp: 0x9060, key: 3}
@@ -181,8 +186,6 @@ field_edits:
 
 touch_edits:
   - {match: {page: 56, vp: 0x40D2, key: 0}, set: {vp: 0x9060, key: 0, page_next: null}}       # back
-  - {match: {page: 56, vp: 0x40D2, key: 3}, set: {vp: 0x9060, key: 0x10, page_next: null}}    # previous
-  - {match: {page: 56, vp: 0x40D2, key: 4}, set: {vp: 0x9060, key: 0x11, page_next: null}}    # next
 
 vp_defaults:
   - {vp: 0x9110, text: "Spoolman: waiting for host", bytes: 28}

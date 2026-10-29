@@ -194,7 +194,9 @@ class ScreenSim:
             self._note('local', None, f'touch ({x},{y}) page {self.page}: {kind}')
             if kind == 'return_key':
                 self.set_word(hit.vp, hit.key)
-                self._emit(dgus.reply_words(hit.vp, hit.key), f'key 0x{hit.vp:04X}={hit.key}')
+                # FD controls act locally; only FE controls upload touch events.
+                if hit.data[14] == 0xFE:
+                    self._emit(dgus.reply_words(hit.vp, hit.key), f'key 0x{hit.vp:04X}={hit.key}')
             elif kind == 'increment':
                 cur = dgus.to_signed(self.word(hit.vp))
                 new = cur + d['step'] if d['op'] == 'inc' else cur - d['step']
