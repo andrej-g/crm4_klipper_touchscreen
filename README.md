@@ -1,5 +1,117 @@
 # crm4_klipper_touchscreen
 
-Reuse the Creality CR-M4 stock touchscreen with Klipper.
+Reuse the **Creality CR-M4 stock touchscreen** with Klipper.
 
-Development happens on the `develop` branch.
+The CR-M4's 4.3" 800×480 resistive touchscreen is a DACAI serial HMI running a
+DWIN DGUS-II-compatible UI. Its pages, buttons and fields come from a
+`private/` project folder that Creality ships next to the screen runtime
+(`firmware.zlib`). This repository contains:
+
+- **`crm4ui`**: a Python tool and library that reads, edits and rebuilds that
+  `private/` project. Use it to replace the splash screen and logos, recolour
+  the theme, and add custom pages and buttons.
+- **`crm4ui.emulator`**: a browser emulator of the screen running the stock
+  (or a modified) UI, with a TCP endpoint that speaks the screen's serial
+  protocol.
+- **`crm4bridge`**: the Moonraker bridge that drives the screen from the
+  Klipper host. It runs in dry-run mode by default. There is also a mock
+  Moonraker for offline development. See [docs/bridge.md](docs/bridge.md).
+
+No Creality files are included. You need the official CR-M4 screen package
+(V2.0.3 "new UI", or V1.2.2) from Creality.
+
+## Status
+
+| Part | State |
+|---|---|
+| File formats (`.zbmp`, `.zico`, `13.bin`, `14.bin`, `22.bin`) | decoded; unchanged and fully re-encoded rebuilds are byte-identical to stock |
+| Splash/logo replacement, recolouring, new pages, button retargeting | implemented, **not yet tested on hardware** |
+| Browser emulator | working; rendering details approximate |
+| Moonraker bridge | core screens mapped (files, print control, temps, move, feed, tune, preheat, PID with its temperature graph, mesh and the mesh grid, machine page); tested against the emulator and the mock |
+
+## Install
+
+```sh
+python3 -m pip install -e .          # needs pillow, numpy, pyyaml (+ pyserial for a real screen)
+python3 -m crm4ui --help             # or just: crm4ui --help
+```
+
+## Usage
+
+```sh
+STOCK=/path/to/CR-M4_..._V2.0.3_NEW_UI/private
+
+crm4ui verify  $STOCK                       # rebuild unchanged, expect "85 files, 85 identical"
+crm4ui dump    $STOCK out/map               # ui_map.json + ui_map.md (pages, buttons, VPs)
+crm4ui render  $STOCK out/render            # every page as PNG, English labels, touch/VP overlay
+crm4ui export  $STOCK out/assets            # upright PNGs of all backgrounds and icons, for editing
+crm4ui build   $STOCK examples/splash/spec.yaml build/splash --changed-only --preview build/splash-prev
+```
+
+`build` applies a [spec](docs/spec.md) and writes a new `private/`:
+
+- `--changed-only` writes only the files that differ from stock, for partial updates.
+- `--preview` renders the changed pages.
+
+Examples:
+
+- [`examples/splash`](examples/splash): a new boot splash. This is the suggested first hardware test.
+- [`examples/recolor_amber`](examples/recolor_amber): the cyan accent becomes amber everywhere.
+- [`examples/klipper_branding`](examples/klipper_branding): every "CREALITY" wordmark (main-page header, the 108/109 popup character) redrawn as "KLIPPER" in the screen's own font. The Creality mascot is replaced by a layer-lined Benchy silhouette traced from a source image by `make_boat.py`, and a Klipper-logo splash is rendered from the SVG by `make_splash.py`.
+- [`examples/print_page_shortcuts`](examples/print_page_shortcuts): the nozzle, bed, speed and Z-offset tiles on the Print page become tappable (keypad inputs, and a Z-offset page that returns to Print).
+- [`examples/keypad_titles`](examples/keypad_titles): the nozzle and bed target inputs open their own copies of the keypad, titled "Nozzle temperature" and "Hot bed temperature" (pages 47 and 48). Every other input keeps the untitled stock keypad.
+- [`examples/english_only`](examples/english_only): the screen starts in English and the Language selection tile is removed from the Tune page.
+- [`examples/input_limits`](examples/input_limits): the nozzle target on the Tune and Print pages accepts 0–300 °C instead of Creality's 185–300, so 0 turns the heater off.
+- [`examples/popup_cleanup`](examples/popup_cleanup): the "not developed yet" and error popups without the Creality mascot, with compact cards; "Ok" instead of "Yes".
+- [`examples/unsupported_features`](examples/unsupported_features): Reset configuration, Restore network and CR-Touch testing go straight to the "not developed yet" popup.
+- [`examples/spoolman`](examples/spoolman): the active Spoolman spool on the Print page and the printing pages: colour swatch, material badge (PLA, PETG, PLA-M, PLA-CF, PETG-CF, ABS, ASA, TPU, PA, PLA-W), name and remaining filament. Tapping it opens a spool picker that sets the active spool. Icons are drawn by `make_icons.py`.
+- [`examples/fan_speed`](examples/fan_speed): the fan tiles on the Tune and Manual pages take a speed in percent (keypad) instead of on/off.
+- [`examples/firmware_restart_tile`](examples/firmware_restart_tile): a Firmware restart tile on Tune page 1 (in place of Steps-per-mm), with a Yes/No dialog that returns to the Tune page.
+- [`examples/mesh_grid`](examples/mesh_grid): every value on the mesh grid pages (27/28, 134/135) in white.
+- [`examples/klipper_ui`](examples/klipper_ui): the full UI for this printer. It includes `klipper_branding`, `print_page_shortcuts`, `keypad_titles`, `english_only`, `input_limits`, `popup_cleanup`, `unsupported_features`, `spoolman`, `machine_page`, `fan_speed`, `firmware_restart_tile` and `mesh_grid`; build this one.
+- [`examples/machine_page`](examples/machine_page): a custom page 45 with Klipper restart / firmware restart, host reboot / shutdown (with Yes/No dialogs), E-STOP and the Klipper state. It is reached from the Tune page, where it replaces the WiFi tile. Part of `klipper_ui`.
+
+The example images are generated by `examples/make_assets.py`.
+
+## Emulator and bridge (no hardware needed)
+
+```sh
+python -m crm4bridge.mock_moonraker                         # simulated printer (or use your real Moonraker)
+python -m crm4ui.emulator $STOCK                            # open http://127.0.0.1:8090
+python -m crm4bridge --moonraker http://127.0.0.1:7125 --live
+```
+
+Against a real printer, leave out `--live`; the bridge then only logs the commands it would send. Configuration: `crm4bridge.example.cfg`.
+
+## Flashing a build onto the screen
+
+Keep the untouched stock `private/` + `firmware.zlib` on a separate SD card; re-flashing them is the recovery path. **Never modify `firmware.zlib`.**
+
+1. **Screen microSD slot** (DACAI native; the method in Creality's V1.2.2 readme). Copy `private/` and `firmware.zlib` to the root of a FAT32 card (4096-byte clusters). Insert it, power-cycle, and **remove the card when done**, or it updates again on every boot.
+2. **Over the screen's serial link** (`crm4ui flash`), the protocol Creality's mainboard bootloader uses (`$cfgenter#`, `$file,…#` + 2052-byte packets, `$reboot#`, `$cfgexit#`). Stop the bridge first; it needs the port.
+
+   ```sh
+   crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --dry-run          # list what would be sent
+   crm4ui flash build/klipper --port serial:/dev/ttyAMA0                    # everything (~15 min at 115200)
+   crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --changed-from build/klipper.prev   # only what changed
+   crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --baud 921600      # faster data phase (untested)
+   ```
+
+   `--baud` (230400, 460800, 921600) puts that speed in each `$file` command; the screen switches to it for that file's packets and back to 115200 afterwards. The commands themselves always run at 115200. If it fails, run again without `--baud`.
+
+   About 10 KiB/s. From the screen firmware: each file is overwritten as a whole, nothing else is touched or deleted, and order does not matter, so a failed or partial update can simply be re-run. Not yet tried on the real screen. The emulator accepts it too (`--port tcp:127.0.0.1:7901`): received files land in `<private>.ota` and it reboots into them.
+3. **Front USB port**, through Creality's mainboard bootloader (`STM32F4_UPDATE/private` on a USB stick). Untested under Klipper.
+
+## Documentation
+
+- [docs/formats.md](docs/formats.md): file formats and protocol notes
+- [docs/spec.md](docs/spec.md): build spec reference
+- [docs/bridge.md](docs/bridge.md): bridge, emulator, development loop, open assumptions
+- [docs/klipper-mapping.md](docs/klipper-mapping.md): which screen element maps to what in Klipper
+
+## Tests
+
+```sh
+python3 -m unittest discover -s tests                                # format tests, no Creality files needed
+CRM4_STOCK_PRIVATE=$STOCK python3 -m unittest discover -s tests      # plus round-trip/build tests on the real package
+```

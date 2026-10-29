@@ -1,0 +1,26 @@
+# Make the four status tiles on the Print (main) page tappable:
+#   nozzle tile  -> keypad for the nozzle target   (same input as the Tune page)
+#   bed tile     -> keypad for the bed target
+#   speed tile   -> keypad for the print speed %
+#   Z-offset     -> Z-offset page; "back" returns to the Print page
+#
+# The inputs are clones of the Tune page's (page 14) records, so they use the
+# same VPs, keypad and limits; the bridge already handles those VPs. The
+# Z-offset page is a copy of the stock one (115) with its back button pointed
+# at page 1, because the stock page always returns to Prepare.
+
+copy_pages:
+  - {from: 115, to: 46}                 # Z-offset page reached from the Print page
+
+pages:
+  - id: 1
+    extend: true
+    touch:
+      - {type: clone, from_page: 14, vp: 0x7048, area: [14, 80, 234, 139]}    # nozzle target
+      - {type: clone, from_page: 14, vp: 0x704C, area: [246, 80, 466, 139]}   # bed target
+      - {type: clone, from_page: 14, vp: 0x704E, area: [14, 150, 234, 209]}   # print speed
+      - {type: page_jump, area: [246, 150, 466, 209], page: 46}             # Z-offset
+
+touch_edits:
+  - match: {page: 46, vp: 0x4004, key: 8}          # back arrow on the copied Z-offset page
+    set: {page_next: 1}

@@ -1,0 +1,6 @@
+# First hardware test: replace only the boot splash (page 0).
+# Build:  crm4ui build <stock>/private examples/splash/spec.yaml build/splash --changed-only --preview build/splash-preview
+# With --changed-only the output holds just image/0.zbmp, which also tests
+# whether the screen accepts a partial update.
+images:
+  0: splash.png

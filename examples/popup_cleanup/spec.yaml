@@ -1,0 +1,36 @@
+# Popups without the Creality mascot.
+#
+# page 108  "This feature has not been developed yet" (the bridge shows it for
+#           Creality-only features): mascot and thought bubble removed, card
+#           shrunk to its text, button labelled "Ok" instead of "Yes".
+# page 109  error page (the bridge writes the Klipper error into VP 0x3168):
+#           mascot removed, card shrunk the same way, and the warning sign and
+#           message laid out as one row centred in the card, with a wider box.
+#
+# The mascot sits across the card's top edge, so that area is rebuilt from a
+# clean column of the same card, then the top edge is moved down (y 216 -> 302).
+# The "Yes" label is a per-language icon shared with other dialogs (pages 26 and
+# 118), so it is removed from page 108 only and "Ok" is drawn into the
+# background (the UI is English only).
+# No other page has the mascot; on the main and printing pages it was already
+# replaced by the Benchy (klipper_branding).
+
+retouch:
+  # ---- 108
+  - {target: page, page: 108, rect: [125, 175, 325, 316], fill: {copy_column: 400}}   # mascot
+  - {target: page, page: 108, rect: [0, 302, 479, 315], fill: {copy_from: [0, 216]}}  # card top edge, moved down
+  - {target: page, page: 108, rect: [0, 170, 479, 301], fill: "#000000"}              # old top of the card
+  - {target: page, page: 108, rect: [70, 466, 414, 520], fill: "#B52C31",
+     text: Ok, size: 28, color: "#FFFFFF"}
+  # ---- 109
+  - {target: page, page: 109, rect: [100, 170, 330, 345], fill: {copy_column: 400}}   # mascot
+  - {target: page, page: 109, rect: [36, 397, 110, 456], fill: {copy_from: [155, 378]}}  # warning sign -> left
+  - {target: page, page: 109, rect: [155, 378, 229, 437], fill: {copy_column: 400}}   # its old place
+  - {target: page, page: 109, rect: [0, 302, 479, 315], fill: {copy_from: [0, 216]}}
+  - {target: page, page: 109, rect: [0, 170, 479, 301], fill: "#000000"}
+
+remove_vars:
+  - {page: 108, vp: 0x5247, pos: [176, 458]}       # "Yes" label
+
+field_edits:
+  - {page: 109, vp: 0x3168, box: [118, 413, 440, 441]}   # error message, beside the sign

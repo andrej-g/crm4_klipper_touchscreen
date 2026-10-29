@@ -1,0 +1,191 @@
+# Active Spoolman spool on the Print page and the printing pages.
+#
+#   Print page (1)        [swatch] [badge] spool name
+#                                          remaining g | m | vendor | #id
+#   printing pages 9-12   [swatch] [badge] spool name             remaining g
+#
+# The bridge reads the active spool through Moonraker (/server/spoolman/...)
+# and writes:
+#   0x9100  material badge (crm4bridge.spoolman.MATERIALS: none, PLA, PETG,
+#           PLA-M, PLA-CF, PETG-CF, ABS, ASA, TPU, PA, PLA-W; other materials get
+#           no badge and their name in front of the spool name)
+#   0x9101  colour swatch (crm4bridge.spoolman.COLOURS, nearest of 23; 0 = empty ring)
+#   0x9110  name (28 chars), 0x9120 detail line (28), 0x9130 short name (22), 0x9140 weight (8)
+#
+# The tiles, badges and swatches are drawn by make_icons.py. They sit in the
+# free band between the status tiles and the Benchy / preview; on the Print page
+# the Benchy moves down 40 px to make room.
+#
+# Tapping the tile opens the spool picker (page 56, a copy of file list page 3):
+# six spools per page, most recently used first, with swatch, badge, name and
+# "active | g | location | #id"; tapping one makes it the active spool.
+#   0x9060  return key   0x20 open (from the tiles), 1..6 row, 0x10 / 0x11 prev / next, 0 back
+#   0x9068  text, 8 B    page indicator "1/3"
+#   row i (0..5): 0x9201+i swatch+1, 0x9211+i badge+1 (0 = empty row),
+#                 0x9220+16i name (28 B), 0x9280+16i detail (28 B)
+
+copy_pages:
+  - {from: 3, to: 56}
+
+image_patches:
+  - {page: 1, png: tile_print.png, pos: [14, 218]}
+  - {page: 9, png: tile_status.png, pos: [14, 215]}
+  - {page: 10, png: tile_status.png, pos: [14, 215]}
+  - {page: 11, png: tile_status.png, pos: [14, 215]}
+  - {page: 12, png: tile_status.png, pos: [14, 215]}
+
+retouch:
+  - {target: page, page: 56, rect: [84, 14, 400, 66], fill: "#000000", text: Select spool, size: 30, color: "#FFFFFF"}
+  - {target: page, page: 56, rect: [185, 720, 295, 772], fill: "#000000"}        # baked "2/4"
+
+remove_vars:
+  - {page: 56, vp: 0x4207}
+  - {page: 56, vp: 0x4208}
+  - {page: 56, vp: 0x4209}
+  - {page: 56, vp: 0x420A}
+  - {page: 56, vp: 0x420B}
+  - {page: 56, vp: 0x420C}
+  - {page: 56, vp: 0x3046}
+  - {page: 56, vp: 0x3050}
+  - {page: 56, vp: 0x305A}
+  - {page: 56, vp: 0x3064}
+  - {page: 56, vp: 0x306E}
+  - {page: 56, vp: 0x3078}
+  - {page: 56, vp: 0x5247}
+
+remove_touch:
+  - {page: 56, vp: 0x40D3}                 # file rows (re-added below as spool rows)
+  # Stock arrows are FD05: local-only, never uploaded to the bridge.
+  - {page: 56, vp: 0x40D2, key: 3}
+  - {page: 56, vp: 0x40D2, key: 4}
+
+icons:
+  - {lib: 18, id: 20, png: icons/swatch_00.png}
+  - {lib: 18, id: 21, png: icons/swatch_01.png}
+  - {lib: 18, id: 22, png: icons/swatch_02.png}
+  - {lib: 18, id: 23, png: icons/swatch_03.png}
+  - {lib: 18, id: 24, png: icons/swatch_04.png}
+  - {lib: 18, id: 25, png: icons/swatch_05.png}
+  - {lib: 18, id: 26, png: icons/swatch_06.png}
+  - {lib: 18, id: 27, png: icons/swatch_07.png}
+  - {lib: 18, id: 28, png: icons/swatch_08.png}
+  - {lib: 18, id: 29, png: icons/swatch_09.png}
+  - {lib: 18, id: 30, png: icons/swatch_10.png}
+  - {lib: 18, id: 31, png: icons/swatch_11.png}
+  - {lib: 18, id: 32, png: icons/swatch_12.png}
+  - {lib: 18, id: 33, png: icons/swatch_13.png}
+  - {lib: 18, id: 34, png: icons/swatch_14.png}
+  - {lib: 18, id: 35, png: icons/swatch_15.png}
+  - {lib: 18, id: 36, png: icons/swatch_16.png}
+  - {lib: 18, id: 37, png: icons/swatch_17.png}
+  - {lib: 18, id: 38, png: icons/swatch_18.png}
+  - {lib: 18, id: 39, png: icons/swatch_19.png}
+  - {lib: 18, id: 40, png: icons/swatch_20.png}
+  - {lib: 18, id: 41, png: icons/swatch_21.png}
+  - {lib: 18, id: 42, png: icons/swatch_22.png}
+  - {lib: 18, id: 43, png: icons/swatch_23.png}
+  - {lib: 18, id: 50, png: icons/badge_0.png}
+  - {lib: 18, id: 51, png: icons/badge_1.png}
+  - {lib: 18, id: 52, png: icons/badge_2.png}
+  - {lib: 18, id: 53, png: icons/badge_3.png}
+  - {lib: 18, id: 54, png: icons/badge_4.png}
+  - {lib: 18, id: 55, png: icons/badge_5.png}
+  - {lib: 18, id: 56, png: icons/badge_6.png}
+  - {lib: 18, id: 57, png: icons/badge_7.png}
+  - {lib: 18, id: 58, png: icons/badge_8.png}
+  - {lib: 18, id: 59, png: icons/badge_9.png}
+  - {lib: 18, id: 60, png: icons/badge_10.png}
+
+pages:
+  - id: 1
+    extend: true
+    touch:
+      - {type: return_key, area: [14, 218, 466, 277], vp: 0x9060, key: 0x20}       # open the spool picker
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [26, 232], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [66, 233], v_min: 0, v_max: 10, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9110, box: [156, 223, 458, 243], length: 28, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9120, box: [156, 250, 458, 270], length: 28, font: [10, 20], color: "#A0A0A0"}
+  - id: 9
+    extend: true
+    touch:
+      - {type: return_key, area: [14, 215, 466, 256], vp: 0x9060, key: 0x20}       # open the spool picker
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 10, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
+  - id: 10
+    extend: true
+    touch:
+      - {type: return_key, area: [14, 215, 466, 256], vp: 0x9060, key: 0x20}       # open the spool picker
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 10, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
+  - id: 11
+    extend: true
+    touch:
+      - {type: return_key, area: [14, 215, 466, 256], vp: 0x9060, key: 0x20}       # open the spool picker
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 10, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
+  - id: 12
+    extend: true
+    touch:
+      - {type: return_key, area: [14, 215, 466, 256], vp: 0x9060, key: 0x20}       # open the spool picker
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9101, pos: [24, 220], v_min: 0, v_max: 23, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9100, pos: [64, 221], v_min: 0, v_max: 10, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9130, box: [152, 226, 380, 246], length: 22, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9140, box: [392, 226, 458, 246], length: 8, font: [10, 20], color: "#A0A0A0"}
+
+  - id: 56
+    extend: true
+    touch:
+      - {type: return_key, area: [42, 693, 178, 793], vp: 0x9060, key: 0x10}
+      - {type: return_key, area: [300, 693, 438, 794], vp: 0x9060, key: 0x11}
+      - {type: return_key, area: [22, 92, 462, 178], vp: 0x9060, key: 1}
+      - {type: return_key, area: [22, 192, 462, 278], vp: 0x9060, key: 2}
+      - {type: return_key, area: [22, 292, 462, 378], vp: 0x9060, key: 3}
+      - {type: return_key, area: [22, 392, 462, 478], vp: 0x9060, key: 4}
+      - {type: return_key, area: [22, 492, 462, 578], vp: 0x9060, key: 5}
+      - {type: return_key, area: [22, 592, 462, 678], vp: 0x9060, key: 6}
+    vars:
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9201, pos: [32, 119], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9211, pos: [72, 120], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9220, box: [160, 106, 405, 128], length: 28, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9280, box: [160, 142, 405, 164], length: 28, font: [10, 20], color: "#A0A0A0"}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9202, pos: [32, 219], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9212, pos: [72, 220], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9230, box: [160, 206, 405, 228], length: 28, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9290, box: [160, 242, 405, 264], length: 28, font: [10, 20], color: "#A0A0A0"}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9203, pos: [32, 319], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9213, pos: [72, 320], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9240, box: [160, 306, 405, 328], length: 28, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x92A0, box: [160, 342, 405, 364], length: 28, font: [10, 20], color: "#A0A0A0"}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9204, pos: [32, 419], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9214, pos: [72, 420], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9250, box: [160, 406, 405, 428], length: 28, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x92B0, box: [160, 442, 405, 464], length: 28, font: [10, 20], color: "#A0A0A0"}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9205, pos: [32, 519], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9215, pos: [72, 520], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9260, box: [160, 506, 405, 528], length: 28, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x92C0, box: [160, 542, 405, 564], length: 28, font: [10, 20], color: "#A0A0A0"}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9206, pos: [32, 619], v_min: 1, v_max: 24, icon_min: 20, lib: 18}
+      - {type: clone, from_page: 1, vp: 0x4227, new_vp: 0x9216, pos: [72, 620], v_min: 1, v_max: 11, icon_min: 50, lib: 18}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9270, box: [160, 606, 405, 628], length: 28, font: [10, 20], color: "#FFFFFF"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x92D0, box: [160, 642, 405, 664], length: 28, font: [10, 20], color: "#A0A0A0"}
+      - {type: clone, from_page: 2, vp: 0x300A, new_vp: 0x9068, box: [185, 730, 295, 762], length: 8, font: [14, 28], text_align: center, color: "#FFFFFF"}
+
+field_edits:
+  - {page: 1, vp: 0x4227, pos: [90, 280], at: [90, 240]}     # Benchy down, below the spool tile
+
+touch_edits:
+  - {match: {page: 56, vp: 0x40D2, key: 0}, set: {vp: 0x9060, key: 0, page_next: null}}       # back
+
+vp_defaults:
+  - {vp: 0x9110, text: "Spoolman: waiting for host", bytes: 28}

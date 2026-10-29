@@ -1,0 +1,48 @@
+# Klipper branding: Klipper logo splash, and every "CREALITY" wordmark in the
+# stock V2.0.3 UI replaced with "KLIPPER". Text is redrawn at build time with
+# the screen's own font (truefont/font.ttf of the input package), so no
+# Creality artwork ends up in this repository.
+#
+# Where "CREALITY" appears in the stock UI:
+#   page 0          boot splash                 -> replaced by splash.png
+#   page 1          header wordmark             -> retouched
+#   icons 18/4, 18/5 mascot (main, printing, preview pages; normal + dimmed)
+#                   -> replaced by a Benchy silhouette with print layer lines, traced
+#                      from a source image by make_boat.py (source kept out of git).
+#                   It is a decorative placeholder, not a progress indicator; on the
+#                   printing and preview pages it fills the 300x300 thumbnail area.
+#   pages 108, 109  "not developed" / warning character, chest print
+
+# Colours: the logo's dark grey is rendered white on the splash, and the
+# logo's red (#B12F35) replaces the stock cyan accent everywhere (tabs, buttons,
+# toggles, progress bars, outlines, the boat). Status text that was green (file
+# name / print info on the printing and preview pages) and the cyan error text
+# on page 109 become white: red text on black is hard to read on the panel.
+# The orange target temperatures become Klipper red.
+
+images:
+  0: splash.png            # make_splash.py renders klipper-logo.svg (grey -> white)
+
+retouch:
+  - {target: page, page: 1, rect: [148, 20, 332, 54], fill: "#000000",
+     text: KLIPPER, size: 30, spacing: 5, bold: 1, color: "#FFFFFF"}
+  - {target: page, page: 108, rect: [247, 270, 278, 278], fill: "#FFFFFF",
+     text: KLIPPER, size: 6, color: "#3C3C3C"}
+  - {target: page, page: 109, rect: [227, 293, 258, 300], fill: "#FFFFFF",
+     text: KLIPPER, size: 6, color: "#3C3C3C"}
+
+icons:
+  - {lib: 18, id: 4, png: boat.png}
+  - {lib: 18, id: 5, png: boat_dim.png}
+
+field_colors:
+  - {from: 0x87F0, color: "#FFFFFF"}       # green status text -> white
+  - {vp: 0x3168, color: "#FFFFFF"}         # error message (page 109) -> white
+  - {from: 0xFC00, color: "#B12F35"}       # orange target temperatures -> Klipper red
+
+recolor:
+  rules:
+    - {hue_from: [165, 215], from_color: "#42BED6", to_color: "#B12F35", min_saturation: 0.25}
+  images: true
+  icons: true
+  fields: true
