@@ -1,12 +1,16 @@
 """Bridge configuration: INI file + command-line overrides."""
 import configparser
 import json
+import math
+from urllib.parse import urlsplit
 import os
+from .link import parse_screen_spec
 
 DEFAULTS = {
     'moonraker': 'http://127.0.0.1:7125',
     'api_key': '',
     'screen': 'tcp:127.0.0.1:7901',
+    'screen_startup_timeout': '5',
     'dry_run': 'true',
     'poll_interval': '1.0',
     'language': '1',
@@ -55,6 +59,16 @@ class Config:
         self.moonraker = b['moonraker']
         self.api_key = b['api_key'] or None
         self.screen = b['screen']
+        parse_screen_spec(self.screen)
+        self.screen_startup_timeout = b.getfloat('screen_startup_timeout')
+        if not math.isfinite(self.screen_startup_timeout) or self.screen_startup_timeout <= 0:
+            raise ValueError('screen_startup_timeout must be finite and greater than zero')
+        url = urlsplit(self.moonraker)
+        if url.scheme not in ('http', 'https') or not url.hostname:
+            raise ValueError('moonraker must be an http:// or https:// URL with a host')
+        _ = url.port  # Reject malformed/out-of-range ports before any worker starts.
+        if url.username or url.password or url.query or url.fragment:
+            raise ValueError('moonraker URL must not contain credentials, a query or a fragment; use api_key separately')
         self.dry_run = b.getboolean('dry_run')
         self.poll_interval = b.getfloat('poll_interval')
         self.language = b.getint('language')

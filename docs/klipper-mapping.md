@@ -59,7 +59,7 @@ Value encoding: numeric VPs are 16-bit integers with implied decimals (`dec_digi
 |---|---|---|---|
 | 21 → 114 / 122–127 Temp PID | auto PID nozzle / bed: target `0x7070` / `0x7074`, Start | `PID_CALIBRATE HEATER=extruder TARGET=` / `HEATER=heater_bed`, then `SAVE_CONFIG` on confirm (restarts Klipper; warn first). Pages 123/126 while running, 124/127 done. | Map |
 | 122–127 | cycle count `0x7072` / `0x7076` | Klipper's `PID_CALIBRATE` has no cycle parameter | Ignore (show fixed) |
-| 122–127 | live temp curve (type `0x20`, 2 channels) | feed `extruder` / `heater_bed` temperature and target during `PID_CALIBRATE`: curve-buffer writes to VP `0x0310` (`5A A5 01 00 <ch> 02 <old> <new>`, 1 Hz, bytes ~800 µs apart; channels 0/1 nozzle, 2/3 bed), cleared with `0x0301 + 2·ch` = 0 (V2.0.3 firmware RE §6; screen firmware RE §2a). Implemented in `crm4bridge/curve.py`. Outside an autotune the stock firmware does not feed the curve either. | Adapt, done |
+| 122–127 | live temp curve (type `0x20`, 2 channels) | feed `extruder` / `heater_bed` temperature and target during `PID_CALIBRATE`: curve-buffer writes to VP `0x0310` (`5A A5 01 00 <ch> 01 <current>`, 1 Hz (stock uses two samples, `<ch> 02 <old> <new>`), bytes ~800 µs apart; channels 0/1 nozzle, 2/3 bed), cleared with `0x0301 + 2·ch` = 0 (V2.0.3 firmware RE §6; screen firmware RE §2a). Implemented in `crm4bridge/curve.py`. Outside an autotune the stock firmware does not feed the curve either. | Adapt, done |
 | 114 manual PID | P/I/D for nozzle `0x7000/02/04`, bed `0x7006/08/0A` | read from `configfile.settings.<heater>.pid_kp/ki/kd`. Mainline Klipper has no runtime PID setter. | Display only. Ignore edits. |
 | 128 Max acceleration X/Y/Z/E | `0x7014/16/18/1A` | X/Y → `max_accel` (one value: `SET_VELOCITY_LIMIT ACCEL=`). Z → `max_z_accel` and E: config only. | Adapt X/Y; Z/E display only |
 | 129 Max speed X/Y/Z/E | `0x701C/1E/20/22` | X/Y → `max_velocity` (`SET_VELOCITY_LIMIT VELOCITY=`). Z → `max_z_velocity` (config). E has no equivalent. | Adapt X/Y; Z display; E ignore |
@@ -99,12 +99,12 @@ The labels are images in icon library 19, with 9 languages per label. The format
 - ADV.SET (132): **CR-Touch testing → "Clean nozzle"**, **Improved accuracy → "Screws tilt"**.
 - Leave Creality's page structure intact. Only replace the label icons, and the QR image on page 143.
 
-This needs the screen upload path (Creality bootloader from USB, or the `$cfgenter#` protocol from the Pi) to be proven first.
+Serial UI upload from the Pi has been proven on the test screen. The microSD/front-USB routes remain separate recovery/update paths with their own hardware validation.
 
 ## 5. Bridge implementation notes
 
 - Subscribe in Moonraker to `extruder`, `heater_bed`, `fan`, `gcode_move`, `toolhead`, `print_stats`, `display_status`, `virtual_sdcard`, `idle_timeout`, `filament_switch_sensor filament_sensor`, `bed_mesh`, `webhooks`. Push only changed VPs. Temperatures at 1 Hz are plenty.
 - Track the current page yourself. The screen switches pages locally for `page_next` buttons, and the bridge forces pages via VP `0x0084` for state changes (print started / paused / finished, errors).
-- Treat `0xFD05` touch entries like `0xFE05` return keys until proven otherwise.
+- `0xFE05` return keys upload events; `0xFD05` controls act locally and stay silent. Custom host-driven pagination must use FE05 (the original copied spool arrows were fixed after a real-screen test).
 - Gate motion and extrusion commands on `homed_axes`, `min_extrude_temp` and `print_stats.state`. Refuse moves while printing.
 - Prefer V2.0.3 (map extracted, nicer UI). V1.2.2 is the fallback: its VPs follow Creality's public `lcd_rts` source if a meaning is unclear.
