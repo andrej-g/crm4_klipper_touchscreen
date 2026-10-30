@@ -1,40 +1,72 @@
 # crm4_klipper_touchscreen
 
-Reuse the **Creality CR-M4 stock touchscreen** with Klipper.
+Reuse the **Creality CR-M4 stock DACAI touchscreen with Klipper/Moonraker**.
 
-The CR-M4's 4.3" 800×480 resistive touchscreen is a DACAI serial HMI running a
-DWIN DGUS-II-compatible UI. Its pages, buttons and fields come from a
-`private/` project folder that Creality ships next to the screen runtime
-(`firmware.zlib`). This repository contains:
+The 4.3-inch resistive serial HMI has its own processor and a DGUS-II-compatible
+UI (480×800 portrait coordinates). This project provides:
 
-- **`crm4ui`**: a Python tool and library that reads, edits and rebuilds that
-  `private/` project. Use it to replace the splash screen and logos, recolour
-  the theme, and add custom pages and buttons.
-- **`crm4ui.emulator`**: a browser emulator of the screen running the stock
-  (or a modified) UI, with a TCP endpoint that speaks the screen's serial
-  protocol.
-- **`crm4bridge`**: the Moonraker bridge that drives the screen from the
-  Klipper host. It runs in dry-run mode by default. There is also a mock
-  Moonraker for offline development. See [docs/bridge.md](docs/bridge.md).
+- **crm4bridge**: Python bridge from Moonraker state/actions to the serial screen.
+- **crm4ui**: inspect, customize, rebuild and upload the screen's `private/` UI.
+- **Browser emulator and mock Moonraker**: develop/test without printer hardware.
 
-No Creality files are included. You need the official CR-M4 screen package
-(V2.0.3 "new UI", or V1.2.2) from Creality.
+No Creality firmware packages, `private/` projects or runtime `firmware.zlib`
+are distributed here. Obtain the appropriate official CR-M4 package separately.
+The full custom UI is developed against **V2.0.3 “new UI”**; V1.2.2 is an analysis
+reference, not a promise that every custom spec works with that package.
 
-## Status
+## Install the bridge on a Pi
 
-| Part | State |
-|---|---|
-| File formats (`.zbmp`, `.zico`, `13.bin`, `14.bin`, `22.bin`) | decoded; unchanged and fully re-encoded rebuilds are byte-identical to stock |
-| Splash/logo replacement, recolouring, new pages, button retargeting | implemented, **not yet tested on hardware** |
-| Browser emulator | working; rendering details approximate |
-| Moonraker bridge | core screens mapped (files, print control, temps, move, feed, tune, preheat, PID with its temperature graph, mesh and the mesh grid, machine page); tested against the emulator and the mock |
-
-## Install
+Use Raspberry Pi OS (64-bit; Lite is sufficient), Python 3.9+ and a configured
+UART. The bridge can run on the Klipper host or a separate Pi. Read
+[Pi setup and wiring](docs/raspberry-pi.md) before connecting GPIO.
 
 ```sh
-python3 -m pip install -e .          # needs pillow, numpy, pyyaml (+ pyserial for a real screen)
-python3 -m crm4ui --help             # or just: crm4ui --help
+sudo apt-get update
+sudo apt-get install -y git
+git clone https://github.com/andrej-g/crm4_klipper_touchscreen.git
+cd crm4_klipper_touchscreen
+bash scripts/install.sh --install-deps
 ```
+
+Run as your normal login user. The script creates `.venv` and a **user systemd
+service**, preserving existing config. It does not enable/start the unit by
+default. On a fresh install edit `~/.config/crm4bridge/crm4bridge.cfg`:
+
+```ini
+[bridge]
+moonraker = http://PRINTER_IP:7125
+screen = serial:/dev/serial0@115200
+screen_startup_timeout = 5
+dry_run = true
+machine_page = true
+state_file = ~/.local/state/crm4bridge/state.json
+```
+
+Replace the host/device with yours. A separate Pi must address the real Klipper
+host rather than localhost. Use `machine_page = false` with the untouched stock
+UI. Reboot after adding the user to `dialout`, then power the screen and test:
+
+```sh
+.venv/bin/python -m crm4bridge -c ~/.config/crm4bridge/crm4bridge.cfg --dry-run
+# Ctrl-C after validation, then:
+systemctl --user start crm4bridge
+journalctl --user -u crm4bridge -f
+```
+
+Dry-run reads state and writes the display, while logging printer actions. After
+validation, set `dry_run = false` and restart the unit to enable actual controls.
+For boot without login: `systemctl --user enable crm4bridge` and
+`sudo loginctl enable-linger "$USER"`.
+
+An empty/malformed screen setting exits with a configuration error. A missing,
+unpowered or unresponsive screen fails a bounded read-only startup probe; it
+cannot leave a bridge running after a dead link thread. The user service retries
+operational failures and becomes ready only when the screen answers.
+
+See [installation, migration, updates and troubleshooting](docs/installation.md)
+for options, authentication, failure codes, service lifetime and uninstall.
+An existing bench config/venv is not automatically imported into the new service.
+For UI tools in a terminal, activate `.venv` with `. .venv/bin/activate`.
 
 ## Usage
 
@@ -92,14 +124,14 @@ Keep the untouched stock `private/` + `firmware.zlib` on a separate SD card; re-
 
    ```sh
    crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --dry-run          # list what would be sent
-   crm4ui flash build/klipper --port serial:/dev/ttyAMA0                    # everything (~15 min at 115200)
+   crm4ui flash build/klipper --port serial:/dev/ttyAMA0                    # everything (see estimated duration)
    crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --changed-from build/klipper.prev   # only what changed
    crm4ui flash build/klipper --port serial:/dev/ttyAMA0 --baud 921600      # faster data phase (untested)
    ```
 
    `--baud` (230400, 460800, 921600) puts that speed in each `$file` command; the screen switches to it for that file's packets and back to 115200 afterwards. The commands themselves always run at 115200. If it fails, run again without `--baud`.
 
-   About 10 KiB/s. From the screen firmware: each file is overwritten as a whole, nothing else is touched or deleted, and order does not matter, so a failed or partial update can simply be re-run. Not yet tried on the real screen. The emulator accepts it too (`--port tcp:127.0.0.1:7901`): received files land in `<private>.ota` and it reboots into them.
+   About 10 KiB/s. From the screen firmware: each file is overwritten as a whole, nothing else is touched or deleted, and order does not matter, so a failed or partial update can simply be re-run. Serial UI upload at 115200 has been tested on a real CR-M4 screen; higher data-phase baud rates remain unverified. The emulator accepts it too (`--port tcp:127.0.0.1:7901`): received files land in `<private>.ota` and it reboots into them.
 3. **Front USB port**, through Creality's mainboard bootloader (`STM32F4_UPDATE/private` on a USB stick). Untested under Klipper.
 
 ## Documentation
@@ -115,3 +147,15 @@ Keep the untouched stock `private/` + `firmware.zlib` on a separate SD card; re-
 python3 -m unittest discover -s tests                                # format tests, no Creality files needed
 CRM4_STOCK_PRIVATE=$STOCK python3 -m unittest discover -s tests      # plus round-trip/build tests on the real package
 ```
+
+## License and third-party material
+
+Original project code is licensed under [MIT](LICENSE). Creality firmware and
+third-party logos/artwork retain their respective owners' rights; the MIT grant
+does not relicense them. Klipper/Creality names identify compatible projects and
+hardware; this is an independent integration. Review the provenance/terms of
+artwork you redistribute or publish in your own UI build.
+
+Local config, API keys, state, logs and stock/build outputs belong outside Git.
+Before making an existing repository public, review its **history** as well as
+the current files: removing private values now does not erase older commits.

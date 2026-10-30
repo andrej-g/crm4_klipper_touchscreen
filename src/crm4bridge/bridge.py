@@ -16,6 +16,7 @@ from . import curve, mesh, spoolman, thumbnail, ui
 from .config import State
 from .link import ScreenLink
 from .moonraker import Moonraker, MoonrakerError, tasmota_delayed_off
+from .service import notify_ready
 
 log = logging.getLogger('crm4bridge')
 
@@ -38,7 +39,8 @@ class Bridge:
     def __init__(self, cfg, moon=None, link=None):
         self.cfg = cfg
         self.moon = moon or Moonraker(cfg.moonraker, cfg.api_key)
-        self.link = link or ScreenLink(cfg.screen, on_connect=self._on_screen_connect)
+        self.link = link or ScreenLink(cfg.screen, on_connect=self._on_screen_connect,
+                                       startup_timeout=cfg.screen_startup_timeout)
         self.state = State(cfg.state_file)
         self.cache = {}
         self.cache_lock = threading.Lock()
@@ -240,9 +242,10 @@ class Bridge:
 
     # ======================================================================== main loop
     def run(self):
+        self.link.start()
+        notify_ready()
         log.info('bridge: moonraker %s, screen %s, %s', self.cfg.moonraker, self.cfg.screen,
                  'DRY-RUN (no commands are sent)' if self.cfg.dry_run else 'LIVE')
-        self.link.start()
         next_poll = next_repaint = 0.0
         while not self.stop.is_set():
             try:

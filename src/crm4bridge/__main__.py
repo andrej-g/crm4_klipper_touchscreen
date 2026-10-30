@@ -3,6 +3,7 @@ import argparse
 import logging
 import os
 import sys
+import configparser
 
 from .bridge import Bridge
 from .config import Config
@@ -40,11 +41,17 @@ def main(argv=None):
         overrides['dry_run'] = 'false'
     elif a.dry_run:
         overrides['dry_run'] = 'true'
-    cfg = Config(a.config, overrides)
     try:
+        cfg = Config(a.config, overrides)
         Bridge(cfg).run()
     except KeyboardInterrupt:
         return 0
+    except (ValueError, configparser.Error) as e:
+        logging.getLogger('crm4bridge').error('configuration error: %s', e)
+        return 2
+    except (OSError, ImportError) as e:
+        logging.getLogger('crm4bridge').error('startup failed: %s', e)
+        return 1
 
 
 if __name__ == '__main__':

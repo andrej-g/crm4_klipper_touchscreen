@@ -30,3 +30,10 @@ examples/klipper_branding/source/
 # troubleshooting logs
 logs/
 *.log
+
+# Local credentials and generated service/runtime files
+.env
+.env.*
+*.local.cfg
+*.service
+state.json

@@ -4,10 +4,43 @@ import queue
 import socket
 import threading
 import time
+import math
 
 from crm4ui import dgus
 
 log = logging.getLogger('crm4bridge.link')
+
+
+def parse_screen_spec(spec):
+    """Validate before starting threads or opening a device."""
+    if not isinstance(spec, str) or not spec.strip():
+        raise ValueError('screen must not be empty (use serial:PORT[@baud] or tcp:HOST:PORT)')
+    kind, _, arg = spec.strip().partition(':')
+    if kind == 'serial':
+        port, sep, baud = arg.partition('@')
+        try:
+            speed = int(baud) if sep else 115200
+        except ValueError:
+            raise ValueError('screen serial baud must be a positive integer') from None
+        if not port.strip() or speed <= 0:
+            raise ValueError('screen serial port and positive baud are required')
+        return kind, port.strip(), speed
+    if kind == 'tcp':
+        host, sep, port = arg.rpartition(':')
+        try:
+            number = int(port)
+        except ValueError:
+            raise ValueError('screen TCP port must be an integer from 1 to 65535') from None
+        if not sep or not host.strip() or not 1 <= number <= 65535:
+            raise ValueError('screen TCP host and port (1..65535) are required')
+        host = host.strip()
+        if host.startswith('[') != host.endswith(']'):
+            raise ValueError('screen TCP IPv6 brackets are unbalanced')
+        host = host.strip('[]')
+        if not host:
+            raise ValueError('screen TCP host is required')
+        return kind, host, number
+    raise ValueError('bad screen spec (use serial:PORT[@baud] or tcp:HOST:PORT)')
 
 
 class ScreenLink:
@@ -18,8 +51,12 @@ class ScreenLink:
     bridge can repaint the screen.
     """
 
-    def __init__(self, spec, on_connect=None):
+    def __init__(self, spec, on_connect=None, startup_timeout=5.0):
         self.spec = spec
+        self.endpoint = parse_screen_spec(spec)
+        if not math.isfinite(startup_timeout) or startup_timeout <= 0:
+            raise ValueError('screen_startup_timeout must be finite and greater than zero')
+        self.startup_timeout = startup_timeout
         self.rx = queue.Queue()
         self.on_connect = on_connect
         self._io = None
@@ -28,7 +65,9 @@ class ScreenLink:
         self.tx_bytes = 0
 
     def start(self):
-        threading.Thread(target=self._run, name='screen-link', daemon=True).start()
+        # Refuse startup synchronously: a UART can open even with no powered screen.
+        io = self._ready_io()
+        threading.Thread(target=self._run, args=(io,), name='screen-link', daemon=True).start()
 
     def send(self, frame: dgus.Frame, byte_gap=0.0):
         """Send one frame. ``byte_gap`` > 0 writes the bytes one at a time with that
@@ -57,29 +96,59 @@ class ScreenLink:
                 return False
 
     def _open(self):
-        kind, _, arg = self.spec.partition(':')
+        kind, address, number = self.endpoint
         if kind == 'tcp':
-            host, _, port = arg.rpartition(':')
-            s = socket.create_connection((host or '127.0.0.1', int(port)), timeout=5)
-            s.settimeout(None)
+            s = socket.create_connection((address, number), timeout=self.startup_timeout)
+            s.settimeout(0.1)
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-            return {'write': s.sendall, 'read': lambda: s.recv(4096), 'close': s.close, 'paced': False}
+            def read():
+                try:
+                    return s.recv(4096)
+                except socket.timeout:
+                    return _EMPTY_OK
+            return {'write': s.sendall, 'read': read, 'close': s.close, 'paced': False}
         if kind == 'serial':
             import serial
-            port, _, baud = arg.partition('@')
-            ser = serial.Serial(port, int(baud or 115200), timeout=0.1)
+            ser = serial.Serial(address, number, timeout=0.1, write_timeout=self.startup_timeout)
             return {'write': ser.write, 'read': lambda: ser.read(256) or _EMPTY_OK, 'close': ser.close,
                     'flush': ser.flush, 'paced': True}
-        raise ValueError(f'bad screen spec {self.spec!r} (use serial:PORT[@baud] or tcp:HOST:PORT)')
+        raise AssertionError('unvalidated screen endpoint')
 
-    def _run(self):
+    def _ready_io(self):
+        io = self._open()
+        try:
+            parser = dgus.Parser()
+            deadline = time.monotonic() + self.startup_timeout
+            next_query = 0.0
+            while time.monotonic() < deadline:
+                now = time.monotonic()
+                if now >= next_query:
+                    io['write'](dgus.read_words(0x0014, 1).to_bytes())
+                    next_query = now + 0.5
+                data = io['read']()
+                if data is _EMPTY_OK:
+                    continue
+                if not data:
+                    raise OSError('screen connection closed during startup')
+                for frame in parser.feed(data):
+                    if (frame.cmd == dgus.CMD_READ and frame.vp == 0x0014
+                            and len(frame.data) == 5 and frame.data[2] == 1):
+                        return io
+            raise OSError(f'screen did not answer the page query within {self.startup_timeout:g}s; '
+                          'check screen power, UART wiring and baud')
+        except BaseException:
+            io['close']()
+            raise
+
+    def _run(self, io=None):
         while True:
-            try:
-                io = self._open()
-            except OSError as e:
-                log.info('screen link %s not available (%s); retrying', self.spec, e)
-                time.sleep(2)
-                continue
+            if io is None:
+                try:
+                    io = self._ready_io()
+                except OSError as e:
+                    log.info('screen link %s not available (%s); retrying', self.spec, e)
+                    time.sleep(2)
+                    continue
             with self._lock:
                 self._io = io
             self.connected.set()
@@ -106,6 +175,7 @@ class ScreenLink:
                 io['close']()
             except OSError:
                 pass
+            io = None
             time.sleep(1)
 
 

@@ -1,5 +1,9 @@
 # Bridge and emulator
 
+Production setup: [installation and user service](installation.md), [Pi configuration](raspberry-pi.md).
+Hardware-tested features and remaining validation are summarized in the [README](../README.md).
+
+
 ```
  browser ──http──► crm4ui.emulator ◄──tcp:7901 (DGUS frames)──► crm4bridge ──http──► Moonraker ──► Klipper
                    (renders the stock UI,                       (state → VPs,
@@ -20,7 +24,7 @@ python -m crm4bridge --moonraker http://127.0.0.1:7125 --live     # live against
 Against the real printer (VPN or LAN), start in the default **dry-run** mode:
 
 ```sh
-python -m crm4bridge --moonraker http://klipper.lan.gustin.si:7125
+python -m crm4bridge --moonraker http://printer.local:7125
 ```
 
 In dry-run the bridge reads everything (temperatures, files, metadata, print state) but only **logs** commands (`DRY-RUN: SET_HEATER_TEMPERATURE …`). `--live` sends them. Use a config file for the rest (`crm4bridge.example.cfg`).
@@ -73,7 +77,7 @@ The emulator log has every touch (with coordinates), every page change and every
   - **Machine page (custom, Tune 2/2 in place of WiFi):** Klipper `RESTART` and `FIRMWARE_RESTART`, host reboot and shutdown (`/machine/reboot`, `/machine/shutdown`), each after a Yes/No dialog, and an immediate EMERGENCY STOP. Firmware restart is also on Tune page 1 (`examples/firmware_restart_tile`). Host actions are refused while a print is running or paused. With `shutdown_plug` set (a Tasmota plug that powers the printer and the Pi), the bridge first sends the plug `Backlog Delay <n>; Power1 Off`, so the plug switches itself off `shutdown_plug_delay` seconds after the Pi has halted; if the plug can't be reached, the host is not shut down.
   - **Everything else** shows the "not developed yet" popup (its Ok returns to the page the tap came from, `ui.NOT_SUPPORTED_RETURN`): Creality Wi-Fi/cloud, restore network, reset configuration, feedback, CR-Touch tests, improved accuracy, power-loss recovery, home offsets (X/Y/Z), manual PID and PID cycle counts, steps/mm, and Z/E velocity limits. With the `klipper_ui` build these tiles no longer open their own pages first (`examples/unsupported_features`).
 
-## Assumptions to confirm on the real screen
+## Protocol evidence and remaining hardware checks
 
 Most of these are now confirmed from the stock mainboard firmware (V1.5.1 and V2.0.3, see the project notes "CR-M4 Stock Touchscreen - Mainboard Firmware RE"); what's left needs the real screen.
 
@@ -84,7 +88,7 @@ Most of these are now confirmed from the stock mainboard firmware (V1.5.1 and V2
 | Page switch through VP `0x0084` = `5A 01 00 PP` | Confirmed. |
 | Toggle icons 2 = on, 3 = off; motors 10 = on, 11 = off | Confirmed. |
 | Start-up handshake | None in the stock firmware: it waits 500 ms after power-up, then writes. |
-| UART: 115200 8N1 on the mainboard's USART6 (PC6 TX / PC7 RX), 3.3 V | Confirmed from the firmware; logic level at the screen connector still to measure. |
+| UART: 115200 8N1 on the mainboard's USART6 (PC6 TX / PC7 RX), 3.3 V | Confirmed from the firmware; TX measured 3.3 V on the tested unit; verify other board revisions before wiring. |
 | Thumbnail JPEG at `0xC000`, displayed by the screen | Format from the firmware; display on the real screen untested. |
 | Print-progress dim over the thumbnail (`0x8800`, SP `0x9001–0x9004`) | Driven (see above); display on the real screen untested. |
 | Mesh grid: VP `0x7100 + 2i`, mm×1000 as signed 16-bit, serpentine from the bottom-left | Write order and scale from the V2.0.3 firmware; the field layout (2.3 digits, `var_type` 0, serpentine positions) from the stock `14.bin`. Sign handling of negative values on the real screen untested. |
@@ -103,3 +107,8 @@ First time on the real screen (bridge in `--live` against the real Moonraker, or
 6. **Bed.** Same with the bed autotune (page 126/127, channels 2/3).
 
 Record the result of each step, with the bridge log, in the project's Engineering Log.
+
+
+## Startup readiness
+
+Screen specs are validated before workers start. The link must answer a read of VP 0x0014 within `screen_startup_timeout` (default 5 s); opening a UART without a powered screen is insufficient. Failures exit in the main process. See [failure codes and retry policy](installation.md#startup-checks-and-failure-behavior). This is a startup check, not a continuous UART power-loss watchdog.
